@@ -726,20 +726,22 @@ export default function CustomerMenu({ categories, products, testimonials, promo
             className="fixed bottom-20 left-4 right-4 z-50 md:hidden"
           >
             <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <SheetTrigger asChild>
-                <Button className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-2xl flex items-center justify-between px-6 font-bold border-2 border-white/20 backdrop-blur-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white/20 px-2 py-1 rounded-lg text-xs">
-                      {cartCount}
+              <SheetTrigger
+                render={
+                  <Button className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-2xl flex items-center justify-between px-6 font-bold border-2 border-white/20 backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 px-2 py-1 rounded-lg text-xs">
+                        {cartCount}
+                      </div>
+                      <span>Ver Sacola</span>
                     </div>
-                    <span>Ver Sacola</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/80 text-xs font-normal">Total</span>
-                    <span>R$ {total.toFixed(2)}</span>
-                  </div>
-                </Button>
-              </SheetTrigger>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/80 text-xs font-normal">Total</span>
+                      <span>R$ {total.toFixed(2)}</span>
+                    </div>
+                  </Button>
+                }
+              />
               <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
                 <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
                 <div className="px-6 pb-6 h-full flex flex-col">
@@ -913,15 +915,17 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         {cartCount > 0 && (
           <div className="fixed bottom-6 right-6 z-50">
             <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <SheetTrigger asChild>
-                <Button size="lg" className="h-16 rounded-full bg-green-600 shadow-2xl hover:bg-green-700 border-4 border-white px-8">
-                  <ShoppingCart className="mr-2 h-6 w-6" />
-                  Carrinho ({cartCount})
-                  <span className="ml-4 font-bold text-xl">
-                    R$ {total.toFixed(2)}
-                  </span>
-                </Button>
-              </SheetTrigger>
+              <SheetTrigger
+                render={
+                  <Button size="lg" className="h-16 rounded-full bg-green-600 shadow-2xl hover:bg-green-700 border-4 border-white px-8">
+                    <ShoppingCart className="mr-2 h-6 w-6" />
+                    Carrinho ({cartCount})
+                    <span className="ml-4 font-bold text-xl">
+                      R$ {total.toFixed(2)}
+                    </span>
+                  </Button>
+                }
+              />
               <SheetContent side="right" className="w-full sm:max-w-md border-none shadow-2xl">
                 <SheetHeader className="pb-4">
                   <SheetTitle className="flex items-center gap-2 text-2xl">
@@ -1301,19 +1305,21 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         </a>
         
         <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-          <SheetTrigger asChild>
-            <button 
-              className="flex flex-col items-center gap-1 text-slate-400 relative"
-            >
-              <ShoppingCart className="w-6 h-6" />
-              <span className="text-[10px] font-medium">Carrinho</span>
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          </SheetTrigger>
+          <SheetTrigger
+            render={
+              <button 
+                className="flex flex-col items-center gap-1 text-slate-400 relative"
+              >
+                <ShoppingCart className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Carrinho</span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border-2 border-white">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+            }
+          />
           <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
             <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
             <div className="px-6 pb-6 h-full flex flex-col">

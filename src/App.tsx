@@ -77,8 +77,9 @@ export default function App() {
           setCategories(catData.map(c => ({
             id: c.id,
             name: c.name,
-            icon: 'Utensils', // Default since icon isn't in screenshot
-            image: ''
+            icon: c.icon || 'Utensils',
+            emoji: c.emoji || '',
+            image: c.image_url || ''
           })));
         }
 
@@ -204,7 +205,9 @@ export default function App() {
       for (const cat of newCategories) {
         await supabase.from('categories').upsert({
           id: cat.id,
-          name: cat.name
+          name: cat.name,
+          icon: cat.icon,
+          emoji: cat.emoji
         });
       }
 
