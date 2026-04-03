@@ -189,8 +189,23 @@ export default function CustomerMenu({ categories, products, testimonials, promo
 
     onPlaceOrder(newOrder);
 
-    // Save to Supabase
-    const saveToSupabase = async () => {
+    // WhatsApp Message
+    const message = `*🥗 NOVO PEDIDO - lev&fit*%0A` +
+      `--------------------------------%0A` +
+      `*👤 Cliente:* ${customerName}%0A` +
+      `*📱 Telefone:* ${customerPhone}%0A` +
+      `*💳 Pagamento:* ${paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'cartao-link' ? 'Cartão (Link)' : 'Dinheiro'}%0A` +
+      `--------------------------------%0A` +
+      `*🛒 Itens:*%0A` +
+      cart.map(item => `• ${item.quantity}x ${item.name}${item.notes ? ` _(${item.notes})_` : ''}`).join('%0A') +
+      `%0A--------------------------------%0A` +
+      `*💰 TOTAL: R$ ${total.toFixed(2)}*%0A` +
+      (discount > 0 ? `_Desconto aplicado: R$ ${discount.toFixed(2)}_%0A` : '') +
+      `%0A*Aguardando sua confirmação!* ✨`;
+
+    // Save to Supabase first
+    const saveOrder = async () => {
+      const loadingToast = toast.loading('Processando seu pedido...');
       try {
         const { error } = await supabase
           .from('orders')
@@ -208,41 +223,29 @@ export default function CustomerMenu({ categories, products, testimonials, promo
             }
           ]);
         
-        if (error) {
-          console.error('Error saving to Supabase:', error);
-          // Don't toast error here to not confuse user if WhatsApp worked
-        }
+        if (error) throw error;
+
+        // Save to my orders locally
+        const updatedMyOrders = [newOrder, ...myOrders];
+        setMyOrders(updatedMyOrders);
+        localStorage.setItem('my_orders', JSON.stringify(updatedMyOrders));
+
+        setCart([]);
+        setCustomerName('');
+        setCustomerPhone('');
+        setIsCartOpen(false);
+        
+        toast.success('Pedido registrado! Abrindo WhatsApp...', { id: loadingToast });
+        
+        const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone.replace(/\D/g, '')}&text=${message}`;
+        window.open(whatsappUrl, '_blank');
       } catch (err) {
-        console.error('Supabase connection error:', err);
+        console.error('Error saving order:', err);
+        toast.error('Erro ao salvar pedido no sistema. Tente novamente.', { id: loadingToast });
       }
     };
 
-    saveToSupabase();
-
-    // WhatsApp Message
-    const message = `*Novo Pedido - lev&fit*%0A%0A` +
-      `*Cliente:* ${customerName}%0A` +
-      `*Telefone:* ${customerPhone}%0A` +
-      `*Pagamento:* ${paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'cartao-link' ? 'Cartão (Link)' : 'Dinheiro'}%0A%0A` +
-      `*Itens:*%0A` +
-      cart.map(item => `- ${item.quantity}x ${item.name}${item.notes ? ` (${item.notes})` : ''}`).join('%0A') +
-      `%0A%0A*Total: R$ ${total.toFixed(2)}*` +
-      (discount > 0 ? `%0A(Desconto: R$ ${discount.toFixed(2)})` : '');
-
-    // Save to my orders
-    const updatedMyOrders = [newOrder, ...myOrders];
-    setMyOrders(updatedMyOrders);
-    localStorage.setItem('my_orders', JSON.stringify(updatedMyOrders));
-
-    setCart([]);
-    setCustomerName('');
-    setCustomerPhone('');
-    setIsCartOpen(false);
-    
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone}&text=${message}`;
-    window.open(whatsappUrl, '_blank');
-
-    toast.success('Pedido enviado com sucesso! Redirecionando para o WhatsApp...');
+    saveOrder();
   };
 
   return (
