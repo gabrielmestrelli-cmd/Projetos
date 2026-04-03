@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 interface CustomerMenuProps {
   categories: Category[];
@@ -187,6 +188,36 @@ export default function CustomerMenu({ categories, products, testimonials, promo
     };
 
     onPlaceOrder(newOrder);
+
+    // Save to Supabase
+    const saveToSupabase = async () => {
+      try {
+        const { error } = await supabase
+          .from('orders')
+          .insert([
+            {
+              id: newOrder.id,
+              customer_name: newOrder.customerName,
+              customer_phone: newOrder.customerPhone,
+              items: newOrder.items,
+              total_price: newOrder.total,
+              discount: newOrder.discount,
+              payment_method: newOrder.paymentMethod,
+              status: newOrder.status,
+              created_at: newOrder.createdAt,
+            }
+          ]);
+        
+        if (error) {
+          console.error('Error saving to Supabase:', error);
+          // Don't toast error here to not confuse user if WhatsApp worked
+        }
+      } catch (err) {
+        console.error('Supabase connection error:', err);
+      }
+    };
+
+    saveToSupabase();
 
     // WhatsApp Message
     const message = `*Novo Pedido - lev&fit*%0A%0A` +

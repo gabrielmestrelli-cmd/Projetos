@@ -11,6 +11,7 @@ import AdminPanel from './components/AdminPanel';
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } from './constants';
 import { Leaf, Settings } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -66,6 +67,48 @@ export default function App() {
     if (savedOrders) {
       setOrders(JSON.parse(savedOrders));
     }
+
+    // Fetch from Supabase
+    const fetchOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (data && !error) {
+          const formattedOrders: Order[] = data.map(o => ({
+            id: o.id,
+            customerName: o.customer_name,
+            customerPhone: o.customer_phone,
+            items: o.items,
+            total: o.total_price,
+            discount: o.discount,
+            paymentMethod: o.payment_method,
+            status: o.status,
+            createdAt: o.created_at,
+          }));
+          setOrders(formattedOrders);
+          localStorage.setItem('orders_data', JSON.stringify(formattedOrders));
+        }
+      } catch (err) {
+        console.error('Supabase fetch error:', err);
+      }
+    };
+
+    fetchOrders();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Save data to localStorage when it changes
@@ -91,10 +134,20 @@ export default function App() {
     localStorage.setItem('orders_data', JSON.stringify(newOrders));
   };
 
-  const updateOrderStatus = (orderId: string, status: Order['status']) => {
+  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     const newOrders = orders.map(o => o.id === orderId ? { ...o, status } : o);
     setOrders(newOrders);
     localStorage.setItem('orders_data', JSON.stringify(newOrders));
+
+    // Update Supabase
+    try {
+      await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId);
+    } catch (err) {
+      console.error('Supabase update error:', err);
+    }
   };
 
   return (
