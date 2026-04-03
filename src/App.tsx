@@ -104,7 +104,7 @@ export default function App() {
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
             <Link to="/" className="flex items-center gap-2 font-bold text-xl text-green-600">
               <Leaf className="h-6 w-6" />
-              <span>Lev <span className="text-slate-900">& Fit</span></span>
+              <span>lev<span className="text-slate-900">&fit</span></span>
             </Link>
             <nav className="flex items-center gap-4">
               {/* Visible settings icon for admin access */}

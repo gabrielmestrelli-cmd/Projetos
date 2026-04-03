@@ -188,6 +188,19 @@ export default function CustomerMenu({ categories, products, testimonials, promo
 
     onPlaceOrder(newOrder);
 
+    // WhatsApp Message
+    const message = `*Novo Pedido - lev&fit*%0A%0A` +
+      `*Cliente:* ${customerName}%0A` +
+      `*Telefone:* ${customerPhone}%0A` +
+      `*Pagamento:* ${paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'cartao-link' ? 'Cartão (Link)' : 'Dinheiro'}%0A%0A` +
+      `*Itens:*%0A` +
+      cart.map(item => `- ${item.quantity}x ${item.name}${item.notes ? ` (${item.notes})` : ''}`).join('%0A') +
+      `%0A%0A*Total: R$ ${total.toFixed(2)}*` +
+      (discount > 0 ? `%0A(Desconto: R$ ${discount.toFixed(2)})` : '');
+
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone}&text=${message}`;
+    window.open(whatsappUrl, '_blank');
+
     // Save to my orders
     const updatedMyOrders = [newOrder, ...myOrders];
     setMyOrders(updatedMyOrders);
@@ -204,7 +217,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       {/* Instagram Style Header */}
       <div className="bg-white sticky top-0 z-40 px-4 py-3 border-b border-slate-100 flex items-center justify-between md:hidden">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">{profile.instagram}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">@{profile.instagram}</h1>
           <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
         </div>
         <div className="flex items-center gap-4 text-slate-700">
@@ -225,9 +238,9 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                   <img src={profile.profilePicture} className="w-full h-full object-cover" />
                 ) : (
                   <div className="flex items-baseline font-black text-2xl md:text-4xl tracking-tighter select-none">
-                    <span className="text-green-600">L</span>
+                    <span className="text-green-600">lev</span>
                     <span className="text-slate-900 text-lg md:text-2xl mx-0.5">&</span>
-                    <span className="text-slate-900">F</span>
+                    <span className="text-slate-900">fit</span>
                   </div>
                 )}
               </div>
@@ -236,7 +249,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
           <div className="flex-1 space-y-3">
             <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl md:text-2xl font-bold text-slate-900">{profile.instagram}</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900">@{profile.instagram}</h1>
                 <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
               </div>
               <div className="flex gap-2">
@@ -1369,7 +1382,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       </Dialog>
       {/* Discreet Footer with Admin Link */}
       <footer className="py-8 px-4 border-t border-slate-50 text-center space-y-2">
-        <p className="text-xs text-slate-300">© 2024 Lev & Fit - Marmitas Congeladas</p>
+        <p className="text-xs text-slate-300">© 2024 lev&fit - Marmitas Congeladas</p>
         <Link to="/admin" className="text-[10px] text-slate-100 hover:text-green-600 transition-colors opacity-10 hover:opacity-100">
           Painel Administrativo
         </Link>
