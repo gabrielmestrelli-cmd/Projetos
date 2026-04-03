@@ -642,5 +642,5 @@ export const INITIAL_PROFILE: BusinessProfile = {
 
 export const BUSINESS_CONFIG = {
   phone: '5548991764001', // Telefone pessoal atualizado
-  instagram: 'lovfitcongelados',
+  instagram: 'levfitcongelados',
 };
