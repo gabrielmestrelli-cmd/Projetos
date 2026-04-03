@@ -11,7 +11,6 @@ import AdminPanel from './components/AdminPanel';
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } from './constants';
 import { Leaf, Settings } from 'lucide-react';
-import { supabase } from './lib/supabase';
 
 export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -21,106 +20,81 @@ export default function App() {
   const [profile, setProfile] = useState<BusinessProfile>(INITIAL_PROFILE);
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // Load data from Supabase on mount
+  // Load data from localStorage on mount
   useEffect(() => {
-    const fetchSupabaseData = async () => {
-      // Fetch categories
-      const { data: catData } = await supabase.from('categories').select('*');
-      if (catData && catData.length > 0) setCategories(catData);
-      else setCategories(INITIAL_CATEGORIES);
+    const savedMenu = localStorage.getItem('menu_data');
+    let finalCategories = INITIAL_CATEGORIES;
+    let finalProducts = INITIAL_PRODUCTS;
+    let finalTestimonials = INITIAL_TESTIMONIALS;
+    let finalPromotions = INITIAL_PROMOTIONS;
+    let finalProfile = INITIAL_PROFILE;
 
-      // Fetch products
-      const { data: prodData } = await supabase.from('products').select('*');
-      if (prodData && prodData.length > 0) setProducts(prodData);
-      else setProducts(INITIAL_PRODUCTS);
+    if (savedMenu) {
+      const parsed = JSON.parse(savedMenu) as MenuData;
+      finalCategories = parsed.categories || INITIAL_CATEGORIES;
+      
+      // Sync descriptions from INITIAL_PRODUCTS to ensure "500g" and other updates are applied
+      // while keeping user-modified fields like price or image if they were changed in admin
+      finalProducts = (parsed.products || INITIAL_PRODUCTS).map(p => {
+        const initial = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+        if (initial && initial.description.includes('500g') && !p.description.includes('500g')) {
+          return { ...p, description: initial.description };
+        }
+        return p;
+      });
 
-      // Fetch orders
-      const { data: orderData } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (orderData) {
-         // Convert snake_case from DB back to the Order format App expects
-         const formattedOrders: Order[] = orderData.map((o: any) => ({
-           id: o.id,
-           customerName: o.customer_name,
-           customerPhone: o.customer_phone,
-           items: o.items,
-           total: o.total_price,
-           discount: 0,
-           paymentMethod: 'pix',
-           status: o.status,
-           createdAt: o.created_at
-         }));
-         setOrders(formattedOrders);
-      }
+      finalTestimonials = parsed.testimonials || INITIAL_TESTIMONIALS;
+      finalPromotions = parsed.promotions || INITIAL_PROMOTIONS;
+      finalProfile = parsed.profile || INITIAL_PROFILE;
+    }
 
-      // Fetch profile
-      const { data: profileData } = await supabase.from('store_profile').select('*').eq('id', 1).single();
-      if (profileData) {
-        setProfile({
-          name: profileData.name || INITIAL_PROFILE.name,
-          instagram: profileData.instagram_url || INITIAL_PROFILE.instagram,
-          phone: profileData.phone || INITIAL_PROFILE.phone,
-          bio: profileData.description || INITIAL_PROFILE.bio,
-          stats: INITIAL_PROFILE.stats, // Stats are static for now or can be added to DB later
-          isOpen: true
-        });
-      } else {
-        setProfile(INITIAL_PROFILE);
-      }
-    };
+    setCategories(finalCategories);
+    setProducts(finalProducts);
+    setTestimonials(finalTestimonials);
+    setPromotions(finalPromotions);
+    setProfile(finalProfile);
 
-    fetchSupabaseData();
+    localStorage.setItem('menu_data', JSON.stringify({ 
+      categories: finalCategories, 
+      products: finalProducts,
+      testimonials: finalTestimonials,
+      promotions: finalPromotions,
+      profile: finalProfile
+    }));
+
+    const savedOrders = localStorage.getItem('orders_data');
+    if (savedOrders) {
+      setOrders(JSON.parse(savedOrders));
+    }
   }, []);
 
-  const updateMenu = async (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
-    // Optimistic UI update
+  // Save data to localStorage when it changes
+  const updateMenu = (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
     setCategories(newCategories);
     setProducts(newProducts);
     if (newTestimonials) setTestimonials(newTestimonials);
     if (newPromotions) setPromotions(newPromotions);
     if (newProfile) setProfile(newProfile);
     
-    // Persist to Supabase
-    if (newCategories.length > 0) {
-      await supabase.from('categories').upsert(newCategories);
-    }
-    if (newProducts.length > 0) {
-      await supabase.from('products').upsert(newProducts);
-    }
-    if (newProfile) {
-      await supabase.from('store_profile').upsert({
-        id: 1,
-        name: newProfile.name,
-        instagram_url: newProfile.instagram,
-        phone: newProfile.phone,
-        description: newProfile.bio
-      });
-    }
+    localStorage.setItem('menu_data', JSON.stringify({ 
+      categories: newCategories, 
+      products: newProducts,
+      testimonials: newTestimonials || testimonials,
+      promotions: newPromotions || promotions,
+      profile: newProfile || profile
+    }));
   };
 
-  const addOrder = async (order: Order) => {
-    // Optimistic UI update
+  const addOrder = (order: Order) => {
     const newOrders = [order, ...orders];
     setOrders(newOrders);
-    
-    // Persist to Supabase
-    await supabase.from('orders').insert([{
-      id: order.id,
-      customer_name: order.customerName,
-      customer_phone: order.customerPhone,
-      customer_address: '',
-      items: order.items,
-      total_price: order.total,
-      status: order.status
-    }]);
+    localStorage.setItem('orders_data', JSON.stringify(newOrders));
   };
 
-  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-    // Optimistic UI update
+  const updateOrderStatus = (orderId: string, status: Order['status']) => {
     const newOrders = orders.map(o => o.id === orderId ? { ...o, status } : o);
     setOrders(newOrders);
-    
-    // Persist to Supabase
-    await supabase.from('orders').update({ status }).eq('id', orderId);
+    localStorage.setItem('orders_data', JSON.stringify(newOrders));
   };
 
   return (
