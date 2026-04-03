@@ -629,7 +629,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
 
 export const INITIAL_PROFILE: BusinessProfile = {
   name: 'Lev & Fit 🌿',
-  instagram: 'lovfitcongelados',
+  instagram: 'levfitcongelados',
   phone: '5548991764001',
   bio: 'Marmitas Congeladas Saudáveis 🥗\n📍 Entregamos em Floripa e Grande Florianópolis\n🚚 Entrega a combinar • 🏠 Retirada no local',
   stats: {
