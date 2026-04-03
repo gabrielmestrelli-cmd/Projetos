@@ -69,15 +69,83 @@ export default function App() {
     }
 
     // Fetch from Supabase
-    const fetchOrders = async () => {
+    const fetchAllData = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch Categories
+        const { data: catData } = await supabase.from('categories').select('*');
+        if (catData && catData.length > 0) {
+          setCategories(catData.map(c => ({
+            id: c.id,
+            name: c.name,
+            icon: 'Utensils', // Default since icon isn't in screenshot
+            image: ''
+          })));
+        }
+
+        // Fetch Products
+        const { data: prodData } = await supabase.from('products').select('*');
+        if (prodData && prodData.length > 0) {
+          setProducts(prodData.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            price: Number(p.price),
+            categoryId: p.category_id,
+            image: p.image_url || '',
+            available: p.is_active ?? true,
+            type: 'pronta-entrega',
+            tags: p.tags || []
+          })));
+        }
+
+        // Fetch Profile
+        const { data: profData } = await supabase.from('store_profile').select('*').single();
+        if (profData) {
+          setProfile(prev => ({
+            ...prev,
+            name: profData.name || prev.name,
+            description: profData.description || prev.description,
+            phone: profData.phone || prev.phone,
+            address: profData.address || prev.address,
+            instagram: profData.instagram_url || prev.instagram,
+            deliveryFee: Number(profData.delivery_fee) || prev.deliveryFee
+          }));
+        }
+
+        // Fetch Testimonials
+        const { data: testData } = await supabase.from('testimonials').select('*');
+        if (testData && testData.length > 0) {
+          setTestimonials(testData.map(t => ({
+            id: t.id,
+            name: t.name,
+            comment: t.comment,
+            rating: t.rating,
+            avatar: t.avatar_url || '',
+            createdAt: t.created_at
+          })));
+        }
+
+        // Fetch Promotions
+        const { data: promData } = await supabase.from('promotions').select('*');
+        if (promData && promData.length > 0) {
+          setPromotions(promData.map(p => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            image: p.image_url || '',
+            active: p.is_active ?? true,
+            createdAt: p.created_at
+          })));
+        }
+
+        // Fetch Orders
+        const { data: ordData, error: ordError } = await supabase
           .from('orders')
           .select('*')
           .order('created_at', { ascending: false });
         
-        if (data && !error) {
-          const formattedOrders: Order[] = data.map(o => ({
+        if (ordData && !ordError) {
+          const formattedOrders: Order[] = ordData.map(o => ({
             id: o.id,
             customerName: o.customer_name,
             customerPhone: o.customer_phone,
@@ -96,14 +164,17 @@ export default function App() {
       }
     };
 
-    fetchOrders();
+    fetchAllData();
 
     // Subscribe to real-time updates
     const channel = supabase
-      .channel('orders-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchOrders();
-      })
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_profile' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'promotions' }, () => fetchAllData())
       .subscribe();
 
     return () => {
@@ -111,8 +182,8 @@ export default function App() {
     };
   }, []);
 
-  // Save data to localStorage when it changes
-  const updateMenu = (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
+  // Save data to localStorage and Supabase when it changes
+  const updateMenu = async (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
     setCategories(newCategories);
     setProducts(newProducts);
     if (newTestimonials) setTestimonials(newTestimonials);
@@ -126,6 +197,74 @@ export default function App() {
       promotions: newPromotions || promotions,
       profile: newProfile || profile
     }));
+
+    // Sync with Supabase
+    try {
+      // Sync Categories
+      for (const cat of newCategories) {
+        await supabase.from('categories').upsert({
+          id: cat.id,
+          name: cat.name
+        });
+      }
+
+      // Sync Products
+      for (const prod of newProducts) {
+        await supabase.from('products').upsert({
+          id: prod.id,
+          name: prod.name,
+          description: prod.description,
+          price: prod.price,
+          category_id: prod.categoryId,
+          image_url: prod.image,
+          is_active: prod.available,
+          tags: prod.tags
+        });
+      }
+
+      // Sync Profile
+      if (newProfile) {
+        await supabase.from('store_profile').upsert({
+          id: 1, // Assuming single profile
+          name: newProfile.name,
+          description: newProfile.description,
+          phone: newProfile.phone,
+          address: newProfile.address,
+          instagram_url: newProfile.instagram,
+          delivery_fee: newProfile.deliveryFee
+        });
+      }
+
+      // Sync Testimonials
+      if (newTestimonials) {
+        for (const t of newTestimonials) {
+          await supabase.from('testimonials').upsert({
+            id: t.id,
+            name: t.name,
+            comment: t.comment,
+            rating: t.rating,
+            avatar_url: t.avatar,
+            created_at: t.createdAt
+          });
+        }
+      }
+
+      // Sync Promotions
+      if (newPromotions) {
+        for (const p of newPromotions) {
+          await supabase.from('promotions').upsert({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            image_url: p.image,
+            is_active: p.active,
+            created_at: p.createdAt
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Supabase sync error:', err);
+    }
   };
 
   const addOrder = (order: Order) => {

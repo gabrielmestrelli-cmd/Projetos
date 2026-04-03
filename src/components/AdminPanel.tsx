@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
+import { supabase } from '../lib/supabase';
 
 interface AdminPanelProps {
   categories: Category[];
@@ -52,6 +53,21 @@ export default function AdminPanel({
   const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
   const [qrTableNumber, setQrTableNumber] = useState('1');
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncToSupabase = async () => {
+    setIsSyncing(true);
+    const loadingToast = toast.loading('Sincronizando dados com Supabase...');
+    try {
+      await onUpdateMenu(categories, products, testimonials, promotions, profile);
+      toast.success('Dados sincronizados com sucesso!', { id: loadingToast });
+    } catch (err) {
+      console.error('Sync error:', err);
+      toast.error('Erro ao sincronizar dados.', { id: loadingToast });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
     const file = e.target.files?.[0];
@@ -302,20 +318,32 @@ export default function AdminPanel({
     setCategoryForm({ name: '', icon: '', image: '' });
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     const newProducts = products.filter(p => p.id !== id);
     onUpdateMenu(categories, newProducts);
-    toast.success('Produto removido');
+    
+    try {
+      await supabase.from('products').delete().eq('id', id);
+      toast.success('Produto removido');
+    } catch (err) {
+      console.error('Error deleting product:', err);
+    }
   };
 
-  const handleDeleteCategory = (id: string) => {
+  const handleDeleteCategory = async (id: string) => {
     if (products.some(p => p.categoryId === id)) {
       toast.error('Não é possível excluir uma categoria com produtos vinculados');
       return;
     }
     const newCategories = categories.filter(c => c.id !== id);
     onUpdateMenu(newCategories, products);
-    toast.success('Categoria removida');
+    
+    try {
+      await supabase.from('categories').delete().eq('id', id);
+      toast.success('Categoria removida');
+    } catch (err) {
+      console.error('Error deleting category:', err);
+    }
   };
 
   const handleSaveTestimonial = () => {
@@ -376,16 +404,28 @@ export default function AdminPanel({
     toast.success('Perfil atualizado com sucesso!');
   };
 
-  const handleDeleteTestimonial = (id: string) => {
+  const handleDeleteTestimonial = async (id: string) => {
     const newTestimonials = testimonials.filter(t => t.id !== id);
     onUpdateMenu(categories, products, newTestimonials, promotions);
-    toast.success('Depoimento removido');
+    
+    try {
+      await supabase.from('testimonials').delete().eq('id', id);
+      toast.success('Depoimento removido');
+    } catch (err) {
+      console.error('Error deleting testimonial:', err);
+    }
   };
 
-  const handleDeletePromotion = (id: string) => {
+  const handleDeletePromotion = async (id: string) => {
     const newPromotions = promotions.filter(p => p.id !== id);
     onUpdateMenu(categories, products, testimonials, newPromotions);
-    toast.success('Promoção removida');
+    
+    try {
+      await supabase.from('promotions').delete().eq('id', id);
+      toast.success('Promoção removida');
+    } catch (err) {
+      console.error('Error deleting promotion:', err);
+    }
   };
 
   const getStatusBadge = (status: OrderStatus) => {
@@ -438,6 +478,19 @@ export default function AdminPanel({
           </TabsTrigger>
         </TabsList>
 
+        <div className="flex justify-end mt-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSyncToSupabase}
+            disabled={isSyncing}
+            className="text-xs border-slate-200 hover:bg-slate-50"
+          >
+            {isSyncing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3 text-green-600" />}
+            Sincronizar tudo com Supabase
+          </Button>
+        </div>
+
         {/* Profile Tab */}
         <TabsContent value="profile" className="mt-6">
           <Card>
@@ -467,6 +520,21 @@ export default function AdminPanel({
                     <Input 
                       value={profileForm.phone} 
                       onChange={(e) => setProfileForm({...profileForm, phone: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Endereço</Label>
+                    <Input 
+                      value={profileForm.address || ''} 
+                      onChange={(e) => setProfileForm({...profileForm, address: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Taxa de Entrega (R$)</Label>
+                    <Input 
+                      type="number"
+                      value={profileForm.deliveryFee || 0} 
+                      onChange={(e) => setProfileForm({...profileForm, deliveryFee: parseFloat(e.target.value)})}
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-2">
@@ -714,6 +782,15 @@ export default function AdminPanel({
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="tags">Tags (separadas por vírgula)</Label>
+                    <Input 
+                      id="tags" 
+                      placeholder="ex: fit, sem glúten, low carb" 
+                      value={productForm.tags?.join(', ') || ''} 
+                      onChange={(e) => setProductForm({...productForm, tags: e.target.value.split(',').map(t => t.trim())})} 
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="desc">Descrição</Label>

@@ -15,6 +15,7 @@ export interface Product {
   available: boolean;
   type: 'pronta-entrega' | 'encomenda';
   ingredients?: string[];
+  tags?: string[];
 }
 
 export interface OrderItem {
@@ -63,6 +64,9 @@ export interface BusinessProfile {
   instagram: string;
   phone: string;
   bio: string;
+  description?: string;
+  address?: string;
+  deliveryFee?: number;
   stats: {
     posts: number;
     followers: string;
