@@ -294,12 +294,13 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 font-sans">
         <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
-            <Link to="/" className="flex items-center gap-2 font-bold text-xl text-green-600">
-              <Leaf className="h-6 w-6" />
-              <span>lev<span className="text-slate-900">&fit</span></span>
-            </Link>
-            <nav className="flex items-center gap-4">
-              {/* Visible settings icon for admin access */}
+            <div className="flex-1 md:flex-none flex justify-center md:justify-start">
+              <Link to="/" className="flex items-center gap-2 font-bold text-xl text-green-600">
+                <Leaf className="h-6 w-6" />
+                <span>lev<span className="text-slate-900">&fit</span></span>
+              </Link>
+            </div>
+            <nav className="flex items-center gap-4 absolute right-4 md:relative md:right-0">
               <Link to="/admin" className="text-slate-400 hover:text-green-600 transition-colors">
                 <Settings className="h-5 w-5" />
               </Link>

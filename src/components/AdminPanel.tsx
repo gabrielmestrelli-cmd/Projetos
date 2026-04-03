@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Sparkles, Loader2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -115,6 +115,30 @@ export default function AdminPanel({
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState<BusinessProfile>(profile || INITIAL_PROFILE);
+  const [prevOrdersCount, setPrevOrdersCount] = useState(orders.length);
+
+  useEffect(() => {
+    if (orders.length > prevOrdersCount) {
+      const newOrder = orders[0];
+      toast.success(`Novo pedido de ${newOrder.customerName}!`, {
+        description: `Total: R$ ${newOrder.total.toFixed(2)}`,
+        duration: 10000,
+        action: {
+          label: 'Ver Pedido',
+          onClick: () => setActiveTab('orders')
+        }
+      });
+      
+      // Play a notification sound if possible
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play();
+      } catch (e) {
+        console.log('Audio playback failed', e);
+      }
+    }
+    setPrevOrdersCount(orders.length);
+  }, [orders, prevOrdersCount]);
 
   const handleAutoGenerateImages = async () => {
     console.log('Iniciando handleAutoGenerateImages...');
@@ -447,36 +471,43 @@ export default function AdminPanel({
       </div>
 
       <Tabs defaultValue="orders" className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7 lg:w-[900px]">
-          <TabsTrigger value="orders" className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4" />
-            <span className="hidden sm:inline">Pedidos</span>
-          </TabsTrigger>
-          <TabsTrigger value="products" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            <span className="hidden sm:inline">Produtos</span>
-          </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4" />
-            <span className="hidden sm:inline">Marmitas</span>
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Perfil</span>
-          </TabsTrigger>
-          <TabsTrigger value="promotions" className="flex items-center gap-2">
-            <Star className="h-4 w-4" />
-            <span className="hidden sm:inline">Promoções</span>
-          </TabsTrigger>
-          <TabsTrigger value="testimonials" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Feedback</span>
-          </TabsTrigger>
-          <TabsTrigger value="qrcode" className="flex items-center gap-2">
-            <QrCode className="h-4 w-4" />
-            <span className="hidden sm:inline">QR Code</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="flex w-max sm:grid sm:w-full sm:grid-cols-7 lg:w-[900px]">
+            <TabsTrigger value="orders" className="flex items-center gap-2 min-w-[100px] sm:min-w-0 relative">
+              <ClipboardList className="h-4 w-4" />
+              <span className="hidden sm:inline">Pedidos</span>
+              {orders.filter(o => o.status === 'pending').length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {orders.filter(o => o.status === 'pending').length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="products" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Produtos</span>
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Marmitas</span>
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Perfil</span>
+            </TabsTrigger>
+            <TabsTrigger value="promotions" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <Star className="h-4 w-4" />
+              <span className="hidden sm:inline">Promoções</span>
+            </TabsTrigger>
+            <TabsTrigger value="testimonials" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Feedback</span>
+            </TabsTrigger>
+            <TabsTrigger value="qrcode" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+              <QrCode className="h-4 w-4" />
+              <span className="hidden sm:inline">QR Code</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <div className="flex justify-end mt-4">
           <Button 
@@ -662,6 +693,38 @@ export default function AdminPanel({
                               </span>
                               <span className="text-xs text-slate-500 flex items-center gap-1">
                                 <Phone className="h-3 w-3" /> {order.customerPhone}
+                                <div className="flex gap-0.5">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-4 w-4 text-slate-400" 
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(order.customerPhone);
+                                      toast.success('Telefone copiado!');
+                                    }}
+                                  >
+                                    <ClipboardList className="h-2 w-2" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-4 w-4 text-green-600" 
+                                    onClick={() => window.open(`https://wa.me/${order.customerPhone.replace(/\D/g, '')}`, '_blank')}
+                                  >
+                                    <MessageCircle className="h-2 w-2" />
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-6 px-2 text-[10px] border-green-200 text-green-700 hover:bg-green-50 ml-1"
+                                    onClick={() => {
+                                      const msg = `Olá ${order.customerName}! Recebemos seu pedido na *lev&fit* e já estamos preparando com todo carinho. Obrigado pela preferência! 🥗✨`;
+                                      window.open(`https://api.whatsapp.com/send?phone=${order.customerPhone.replace(/\D/g, '')}&text=${encodeURIComponent(msg)}`, '_blank');
+                                    }}
+                                  >
+                                    Confirmar
+                                  </Button>
+                                </div>
                               </span>
                             </div>
                           </TableCell>

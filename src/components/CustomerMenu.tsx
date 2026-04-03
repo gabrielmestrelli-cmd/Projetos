@@ -229,9 +229,6 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       `%0A%0A*Total: R$ ${total.toFixed(2)}*` +
       (discount > 0 ? `%0A(Desconto: R$ ${discount.toFixed(2)})` : '');
 
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone}&text=${message}`;
-    window.open(whatsappUrl, '_blank');
-
     // Save to my orders
     const updatedMyOrders = [newOrder, ...myOrders];
     setMyOrders(updatedMyOrders);
@@ -240,7 +237,12 @@ export default function CustomerMenu({ categories, products, testimonials, promo
     setCart([]);
     setCustomerName('');
     setCustomerPhone('');
-    toast.success('Pedido enviado com sucesso!');
+    setIsCartOpen(false);
+    
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone}&text=${message}`;
+    window.open(whatsappUrl, '_blank');
+
+    toast.success('Pedido enviado com sucesso! Redirecionando para o WhatsApp...');
   };
 
   return (
@@ -258,15 +260,15 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       </div>
 
       <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
-        <div className="flex items-center gap-5 md:gap-12 mb-6">
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
             <div 
-              className="h-20 w-20 md:h-36 md:w-36 rounded-full p-[2.5px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 cursor-pointer"
+              className="h-24 w-24 md:h-36 md:w-36 rounded-full p-[2.5px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 cursor-pointer"
               onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
             >
               <div className="h-full w-full rounded-full border-2 border-white overflow-hidden bg-white flex items-center justify-center">
                 {profile.profilePicture ? (
-                  <img src={profile.profilePicture} className="w-full h-full object-cover" />
+                  <img src={profile.profilePicture} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <div className="flex items-baseline font-black text-2xl md:text-4xl tracking-tighter select-none">
                     <span className="text-green-600">lev</span>
@@ -277,17 +279,17 @@ export default function CustomerMenu({ categories, products, testimonials, promo
               </div>
             </div>
           </div>
-          <div className="flex-1 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+          <div className="flex-1 space-y-4 w-full">
+            <div className="flex flex-col md:flex-row md:items-center items-center gap-3 md:gap-4">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-bold text-slate-900">@{profile.instagram}</h1>
                 <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full md:w-auto justify-center md:justify-start">
                 <Button 
                   variant="default" 
                   size="sm" 
-                  className="h-8 px-4 bg-green-600 hover:bg-green-700 font-bold rounded-lg text-xs flex-1 md:flex-none"
+                  className="h-9 px-4 bg-green-600 hover:bg-green-700 font-bold rounded-lg text-xs flex-1 md:flex-none"
                   onClick={() => {
                     setActiveTab('menu');
                     document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' });
@@ -298,7 +300,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  className="h-8 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center gap-1"
+                  className="h-9 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
                   onClick={() => window.open(`https://wa.me/${profile.phone.replace(/\D/g, '')}`, '_blank')}
                 >
                   <MessageCircle className="h-3 w-3" />
@@ -307,7 +309,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  className="h-8 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center gap-1"
+                  className="h-9 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
                   onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
                 >
                   <Instagram className="h-3 w-3" />
@@ -362,16 +364,28 @@ export default function CustomerMenu({ categories, products, testimonials, promo
               <span className="text-[11px] text-slate-500 uppercase tracking-tight">seguindo</span>
             </div>
           </div>
-          <div className="space-y-0.5 px-1">
+          <div className="space-y-0.5 px-1 text-center md:text-left">
             <p className="font-bold text-sm text-slate-900">{profile.name}</p>
             <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
               {profile.bio}
-              <br />
-              {profile.isOpen ? (
-                <span className="text-green-600 font-bold">● Aberto agora</span>
-              ) : (
-                <span className="text-red-600 font-bold">● Fechado no momento</span>
-              )}
+              <div className="mt-2 flex justify-center md:justify-start">
+                <a 
+                  href={`https://instagram.com/${profile.instagram}`} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-blue-600 font-semibold hover:underline flex items-center gap-1"
+                >
+                  <Instagram className="h-3 w-3" />
+                  @{profile.instagram}
+                </a>
+              </div>
+              <div className="mt-1">
+                {profile.isOpen ? (
+                  <span className="text-green-600 font-bold">● Aberto agora</span>
+                ) : (
+                  <span className="text-red-600 font-bold">● Fechado no momento</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -449,7 +463,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
 
       {/* View Mode Tabs & Search Bar (Sticky Container) */}
       <div id="produtos" className="sticky top-[53px] md:top-0 bg-white z-30 border-b border-slate-100">
-        <div className="flex">
+        <div className="flex max-w-xs mx-auto">
           <button 
             onClick={() => setViewMode('grid')}
             className={`flex-1 flex items-center justify-center py-3 border-b-2 transition-all ${viewMode === 'grid' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400'}`}
@@ -1426,6 +1440,13 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         >
           <Home className="w-6 h-6" />
           <span className="text-[10px] font-medium">Início</span>
+        </button>
+        <button 
+          onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
+          className="flex flex-col items-center gap-1 text-slate-400"
+        >
+          <Instagram className="w-6 h-6" />
+          <span className="text-[10px] font-medium">Instagram</span>
         </button>
         <button 
           onClick={() => setIsCartOpen(true)}
