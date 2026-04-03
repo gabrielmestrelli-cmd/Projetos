@@ -190,6 +190,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
     onPlaceOrder(newOrder);
 
     // WhatsApp Message
+    const adminLink = `${window.location.origin}/admin`;
     const message = `*🥗 NOVO PEDIDO - lev&fit*%0A` +
       `--------------------------------%0A` +
       `*👤 Cliente:* ${customerName}%0A` +
@@ -201,6 +202,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       `%0A--------------------------------%0A` +
       `*💰 TOTAL: R$ ${total.toFixed(2)}*%0A` +
       (discount > 0 ? `_Desconto aplicado: R$ ${discount.toFixed(2)}_%0A` : '') +
+      `%0A*🔗 Ver no Painel:* ${adminLink}%0A` +
       `%0A*Aguardando sua confirmação!* ✨`;
 
     // Save to Supabase (Background)
@@ -233,6 +235,11 @@ export default function CustomerMenu({ categories, products, testimonials, promo
 
     // Execute save in background
     saveOrder();
+
+    // Update local orders history
+    const updatedMyOrders = [newOrder, ...myOrders];
+    setMyOrders(updatedMyOrders);
+    localStorage.setItem('my_orders', JSON.stringify(updatedMyOrders));
 
     // Clear cart and close
     setCart([]);
@@ -406,7 +413,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="space-y-0"
+            className="space-y-0 pb-24"
           >
             {/* iFood Style Banners (Instagram Highlights style) */}
       {promotions.length > 0 && (
@@ -430,14 +437,14 @@ export default function CustomerMenu({ categories, products, testimonials, promo
           onClick={() => setSelectedCategory('all')}
           className="flex flex-col items-center gap-2 flex-shrink-0 group"
         >
-          <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === 'all' ? 'from-yellow-400 via-red-500 to-purple-600' : 'from-slate-200 to-slate-200'} transition-all`}>
+          <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === 'all' ? 'from-green-400 to-green-600 shadow-lg shadow-green-100 scale-110' : 'from-slate-200 to-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
-              <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                <Package className="w-7 h-7" />
+              <div className={`w-full h-full rounded-full flex items-center justify-center text-2xl ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
+                🏠
               </div>
             </div>
           </div>
-          <span className={`text-[11px] ${selectedCategory === 'all' ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+          <span className={`text-[11px] mt-1 transition-all ${selectedCategory === 'all' ? 'font-black text-green-600 scale-110' : 'font-medium text-slate-500'}`}>
             Todos
           </span>
         </button>
@@ -449,18 +456,20 @@ export default function CustomerMenu({ categories, products, testimonials, promo
               onClick={() => setSelectedCategory(cat.id)}
               className="flex flex-col items-center gap-2 flex-shrink-0 group"
             >
-              <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === cat.id ? 'from-yellow-400 via-red-500 to-purple-600' : 'from-slate-200 to-slate-200'} transition-all`}>
+              <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === cat.id ? 'from-green-400 to-green-600 shadow-lg shadow-green-100 scale-110' : 'from-slate-200 to-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
-                  <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center text-slate-600 overflow-hidden">
+                  <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                     {cat.image ? (
                       <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : cat.emoji ? (
+                      cat.emoji
                     ) : (
-                      <Icon className="w-7 h-7" />
+                      <Icon className="w-7 h-7 text-slate-400" />
                     )}
                   </div>
                 </div>
               </div>
-              <span className={`text-[11px] ${selectedCategory === cat.id ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+              <span className={`text-[11px] mt-1 transition-all ${selectedCategory === cat.id ? 'font-black text-green-600 scale-110' : 'font-medium text-slate-500'}`}>
                 {cat.name}
               </span>
             </button>
@@ -709,15 +718,15 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {cartCount > 0 && (
+        {cartCount > 0 && activeTab === 'menu' && (
           <motion.div 
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-20 left-4 right-4 z-50 md:hidden"
           >
-            <Sheet>
-              <SheetTrigger render={
+            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+              <SheetTrigger asChild>
                 <Button className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-2xl flex items-center justify-between px-6 font-bold border-2 border-white/20 backdrop-blur-sm">
                   <div className="flex items-center gap-3">
                     <div className="bg-white/20 px-2 py-1 rounded-lg text-xs">
@@ -730,7 +739,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                     <span>R$ {total.toFixed(2)}</span>
                   </div>
                 </Button>
-              } />
+              </SheetTrigger>
               <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
                 <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
                 <div className="px-6 pb-6 h-full flex flex-col">
@@ -740,16 +749,18 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                       Carrinho
                     </SheetTitle>
                     <SheetDescription className="text-sm">
-                      {marmitaCount >= 15 ? (
-                        <span className="text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
-                      ) : marmitaCount >= 10 ? (
-                        <span className="text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
-                      ) : (
-                        "Adicione 10 ou 15 marmitas para ganhar descontos!"
-                      )}
-                      {coxinhaCount >= 3 && (
-                        <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
-                      )}
+                      <div className="space-y-1">
+                        {marmitaCount >= 15 ? (
+                          <span className="block text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
+                        ) : marmitaCount >= 10 ? (
+                          <span className="block text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
+                        ) : (
+                          <span className="block">Adicione 10 ou 15 marmitas para ganhar descontos!</span>
+                        )}
+                        {coxinhaCount >= 3 && (
+                          <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
+                        )}
+                      </div>
                     </SheetDescription>
                   </SheetHeader>
                   
@@ -774,17 +785,19 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                              <button 
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 rounded-lg text-slate-400"
                                 onClick={() => removeFromCart(item.productId, item.notes)}
-                                className="p-1 hover:bg-slate-50 rounded-lg transition-colors text-slate-400"
                               >
-                                <Minus className="h-4 w-4" />
-                              </button>
+                                <Minus className="h-3 w-3" />
+                              </Button>
                               <Select 
                                 value={item.quantity.toString()} 
                                 onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
                               >
-                                <SelectTrigger className="h-7 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
+                                <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="min-w-[4rem]">
@@ -793,15 +806,17 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <button 
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 rounded-lg text-green-600"
                                 onClick={() => {
                                   const p = products.find(prod => prod.id === item.productId);
                                   if (p) addToCart(p, 1, item.notes);
                                 }}
-                                className="p-1 hover:bg-slate-50 rounded-lg transition-colors text-green-600"
                               >
-                                <Plus className="h-4 w-4" />
-                              </button>
+                                <Plus className="h-3 w-3" />
+                              </Button>
                             </div>
                             <Button 
                               variant="ghost" 
@@ -816,61 +831,74 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                       ))}
                     </div>
 
-                    <div className="space-y-4 pt-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Seus Dados</label>
-                        <Input 
-                          placeholder="Seu Nome" 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-100"
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                        />
-                        <Input 
-                          placeholder="Seu WhatsApp" 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-100"
-                          value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Pagamento</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {['pix', 'cartao-link', 'dinheiro'].map((method) => (
-                            <button
-                              key={method}
-                              onClick={() => setPaymentMethod(method as any)}
-                              className={`py-3 rounded-xl text-[10px] font-bold border transition-all uppercase ${paymentMethod === method ? 'bg-green-600 border-green-600 text-white shadow-lg shadow-green-200' : 'bg-white border-slate-100 text-slate-600'}`}
-                            >
-                              {method.replace('-', ' ')}
-                            </button>
-                          ))}
+                    <div className="space-y-4">
+                      <h3 className="font-bold text-slate-900">Seus Dados</h3>
+                      <div className="grid gap-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="name-mobile" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
+                          <Input id="name-mobile" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                         </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="phone-mobile" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
+                          <Input id="phone-mobile" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="font-bold text-slate-900">Pagamento</h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button 
+                          variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
+                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-600' : 'bg-white'}`}
+                          onClick={() => setPaymentMethod('pix')}
+                        >
+                          <Landmark className="h-5 w-5" />
+                          <span className="text-[10px] font-bold">PIX</span>
+                        </Button>
+                        <Button 
+                          variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
+                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'cartao-link' ? 'bg-green-600' : 'bg-white'}`}
+                          onClick={() => setPaymentMethod('cartao-link')}
+                        >
+                          <CreditCard className="h-5 w-5" />
+                          <span className="text-[10px] font-bold">Cartão</span>
+                        </Button>
+                        <Button 
+                          variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
+                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'dinheiro' ? 'bg-green-600' : 'bg-white'}`}
+                          onClick={() => setPaymentMethod('dinheiro')}
+                        >
+                          <Banknote className="h-5 w-5" />
+                          <span className="text-[10px] font-bold">Dinheiro</span>
+                        </Button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-6 border-t border-slate-100 space-y-4">
+                  <div className="pt-6 space-y-4 bg-white">
+                    <Separator />
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm text-slate-500">
                         <span>Subtotal</span>
                         <span>R$ {subtotal.toFixed(2)}</span>
                       </div>
                       {discount > 0 && (
-                        <div className="flex justify-between text-sm text-green-600 font-medium">
+                        <div className="flex justify-between text-sm text-green-600 font-bold">
                           <span>Descontos Aplicados</span>
                           <span>- R$ {discount.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-lg font-bold text-slate-900">
+                      <div className="flex items-center justify-between text-2xl font-black text-slate-900">
                         <span>Total</span>
-                        <span>R$ {total.toFixed(2)}</span>
+                        <span className="text-green-600">
+                          R$ {total.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                     <Button 
-                      className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-green-100"
+                      className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg font-bold rounded-2xl shadow-lg transition-transform active:scale-95"
                       onClick={handlePlaceOrder}
-                      disabled={!customerName || !customerPhone || cart.length === 0}
                     >
                       Finalizar Pedido
                     </Button>
@@ -881,206 +909,11 @@ export default function CustomerMenu({ categories, products, testimonials, promo
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-100 px-10 py-3 flex items-center justify-between md:hidden safe-area-bottom">
-        <button className="text-slate-900 transition-transform active:scale-90">
-          <Home className="w-7 h-7" />
-        </button>
-        <button className="text-slate-400 transition-transform active:scale-90">
-          <Search className="w-7 h-7" />
-        </button>
-        <button className="text-slate-400 transition-transform active:scale-90">
-          <Plus className="w-7 h-7 border-2 border-slate-400 rounded-lg p-0.5" />
-        </button>
-        <Sheet>
-          <SheetTrigger render={
-            <button className="relative text-slate-400 transition-transform active:scale-90">
-              <ShoppingCart className="w-7 h-7" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          } />
-          <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
-            <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
-            <div className="px-6 pb-6 h-full flex flex-col">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="flex items-center gap-2 text-2xl font-bold">
-                  <ShoppingCart className="h-6 w-6 text-green-600" />
-                  Carrinho
-                </SheetTitle>
-                <SheetDescription className="text-sm">
-                  <div className="space-y-1">
-                    {marmitaCount >= 15 ? (
-                      <span className="block text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
-                    ) : marmitaCount >= 10 ? (
-                      <span className="block text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
-                    ) : (
-                      <span className="block">Adicione 10 ou 15 marmitas para ganhar descontos!</span>
-                    )}
-                    {coxinhaCount >= 3 && (
-                      <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
-                    )}
-                  </div>
-                </SheetDescription>
-              </SheetHeader>
-              
-              <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                <div className="space-y-3">
-                  {cart.map((item) => (
-                    <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-sm text-slate-900">
-                          {item.name}
-                          {item.notes && <span className="text-green-600 ml-1">({item.notes})</span>}
-                        </h4>
-                        <p className="text-xs text-slate-500">
-                          {item.productId.startsWith('mar-') ? (
-                            <>R$ {marmitaUnitPrice.toFixed(2)} cada</>
-                          ) : item.productId.startsWith('cox-') && coxinhaCount >= 3 ? (
-                            <>R$ 8,00 cada (Oferta 3 por 24)</>
-                          ) : (
-                            <>R$ {item.price.toFixed(2)} cada</>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-lg text-slate-400"
-                            onClick={() => removeFromCart(item.productId, item.notes)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <Select 
-                            value={item.quantity.toString()} 
-                            onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
-                          >
-                            <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="min-w-[4rem]">
-                              {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
-                                <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-lg text-green-600"
-                            onClick={() => {
-                              const p = products.find(prod => prod.id === item.productId);
-                              if (p) addToCart(p, 1, item.notes);
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                          onClick={() => clearItemFromCart(item.productId, item.notes)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-bold text-slate-900">Seus Dados</h3>
-                  <div className="grid gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="name" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
-                      <Input id="name" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
-                      <Input id="phone" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-bold text-slate-900">Pagamento</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('pix')}
-                    >
-                      <Landmark className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">PIX</span>
-                    </Button>
-                    <Button 
-                      variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'cartao-link' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('cartao-link')}
-                    >
-                      <CreditCard className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">Cartão</span>
-                    </Button>
-                    <Button 
-                      variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'dinheiro' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('dinheiro')}
-                    >
-                      <Banknote className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">Dinheiro</span>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6 space-y-4 bg-white">
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Subtotal</span>
-                    <span>R$ {subtotal.toFixed(2)}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600 font-bold">
-                      <span>Descontos Aplicados</span>
-                      <span>- R$ {discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-2xl font-black text-slate-900">
-                    <span>Total</span>
-                    <span className="text-green-600">
-                      R$ {total.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-                <Button 
-                  className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg font-bold rounded-2xl shadow-lg transition-transform active:scale-95"
-                  onClick={handlePlaceOrder}
-                >
-                  Finalizar Pedido
-                </Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-        <button className="text-slate-400 transition-transform active:scale-90">
-          <User className="w-7 h-7" />
-        </button>
-      </div>
-
-      {/* Desktop Floating Cart Button */}
       <div className="hidden md:block">
         {cartCount > 0 && (
           <div className="fixed bottom-6 right-6 z-50">
-            <Sheet>
-              <SheetTrigger render={
+            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+              <SheetTrigger asChild>
                 <Button size="lg" className="h-16 rounded-full bg-green-600 shadow-2xl hover:bg-green-700 border-4 border-white px-8">
                   <ShoppingCart className="mr-2 h-6 w-6" />
                   Carrinho ({cartCount})
@@ -1088,7 +921,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                     R$ {total.toFixed(2)}
                   </span>
                 </Button>
-              } />
+              </SheetTrigger>
               <SheetContent side="right" className="w-full sm:max-w-md border-none shadow-2xl">
                 <SheetHeader className="pb-4">
                   <SheetTitle className="flex items-center gap-2 text-2xl">
@@ -1440,39 +1273,226 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         </Link>
       </footer>
       {/* Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-t border-slate-100 px-6 py-2 flex justify-around items-center md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-t border-slate-100 px-6 py-2 flex justify-around items-center md:hidden safe-area-bottom">
         <button 
-          onClick={() => setActiveTab('menu')}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'menu' ? 'text-green-600' : 'text-slate-400'}`}
+          onClick={() => {
+            setActiveTab('menu');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activeTab === 'menu' ? 'text-green-600' : 'text-slate-400'}`}
         >
           <Home className="w-6 h-6" />
           <span className="text-[10px] font-medium">Início</span>
+          {activeTab === 'menu' && (
+            <motion.div 
+              layoutId="activeTab"
+              className="absolute -bottom-1 w-1 h-1 bg-green-600 rounded-full"
+            />
+          )}
         </button>
-        <button 
-          onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
+        <a 
+          href={`https://instagram.com/${profile.instagram}`}
+          target="_blank"
+          rel="noreferrer"
           className="flex flex-col items-center gap-1 text-slate-400"
         >
           <Instagram className="w-6 h-6" />
           <span className="text-[10px] font-medium">Instagram</span>
-        </button>
-        <button 
-          onClick={() => setIsCartOpen(true)}
-          className="flex flex-col items-center gap-1 text-slate-400 relative"
-        >
-          <ShoppingCart className="w-6 h-6" />
-          <span className="text-[10px] font-medium">Carrinho</span>
-          {cart.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
-              {cart.reduce((acc, item) => acc + item.quantity, 0)}
-            </span>
-          )}
-        </button>
+        </a>
+        
+        <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+          <SheetTrigger asChild>
+            <button 
+              className="flex flex-col items-center gap-1 text-slate-400 relative"
+            >
+              <ShoppingCart className="w-6 h-6" />
+              <span className="text-[10px] font-medium">Carrinho</span>
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border-2 border-white">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
+            <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
+            <div className="px-6 pb-6 h-full flex flex-col">
+              <SheetHeader className="pb-4">
+                <SheetTitle className="flex items-center gap-2 text-2xl font-bold">
+                  <ShoppingCart className="h-6 w-6 text-green-600" />
+                  Carrinho
+                </SheetTitle>
+                <SheetDescription className="text-sm">
+                  <div className="space-y-1">
+                    {marmitaCount >= 15 ? (
+                      <span className="block text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
+                    ) : marmitaCount >= 10 ? (
+                      <span className="block text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
+                    ) : (
+                      <span className="block">Adicione 10 ou 15 marmitas para ganhar descontos!</span>
+                    )}
+                    {coxinhaCount >= 3 && (
+                      <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
+                    )}
+                  </div>
+                </SheetDescription>
+              </SheetHeader>
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+                <div className="space-y-3">
+                  {cart.map((item) => (
+                    <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-sm text-slate-900">
+                          {item.name}
+                          {item.notes && <span className="text-green-600 ml-1">({item.notes})</span>}
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          {item.productId.startsWith('mar-') ? (
+                            <>R$ {marmitaUnitPrice.toFixed(2)} cada</>
+                          ) : item.productId.startsWith('cox-') && coxinhaCount >= 3 ? (
+                            <>R$ 8,00 cada (Oferta 3 por 24)</>
+                          ) : (
+                            <>R$ {item.price.toFixed(2)} cada</>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-lg text-slate-400"
+                            onClick={() => removeFromCart(item.productId, item.notes)}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <Select 
+                            value={item.quantity.toString()} 
+                            onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
+                          >
+                            <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="min-w-[4rem]">
+                              {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
+                                <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-lg text-green-600"
+                            onClick={() => {
+                              const p = products.find(prod => prod.id === item.productId);
+                              if (p) addToCart(p, 1, item.notes);
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                          onClick={() => clearItemFromCart(item.productId, item.notes)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-900">Seus Dados</h3>
+                  <div className="grid gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="name" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
+                      <Input id="name" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="phone" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
+                      <Input id="phone" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-900">Pagamento</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button 
+                      variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
+                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-600' : 'bg-white'}`}
+                      onClick={() => setPaymentMethod('pix')}
+                    >
+                      <Landmark className="h-5 w-5" />
+                      <span className="text-[10px] font-bold">PIX</span>
+                    </Button>
+                    <Button 
+                      variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
+                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'cartao-link' ? 'bg-green-600' : 'bg-white'}`}
+                      onClick={() => setPaymentMethod('cartao-link')}
+                    >
+                      <CreditCard className="h-5 w-5" />
+                      <span className="text-[10px] font-bold">Cartão</span>
+                    </Button>
+                    <Button 
+                      variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
+                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'dinheiro' ? 'bg-green-600' : 'bg-white'}`}
+                      onClick={() => setPaymentMethod('dinheiro')}
+                    >
+                      <Banknote className="h-5 w-5" />
+                      <span className="text-[10px] font-bold">Dinheiro</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 space-y-4 bg-white">
+                <Separator />
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-slate-500">
+                    <span>Subtotal</span>
+                    <span>R$ {subtotal.toFixed(2)}</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600 font-bold">
+                      <span>Descontos Aplicados</span>
+                      <span>- R$ {discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-2xl font-black text-slate-900">
+                    <span>Total</span>
+                    <span className="text-green-600">
+                      R$ {total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <Button 
+                  className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg font-bold rounded-2xl shadow-lg transition-transform active:scale-95"
+                  onClick={handlePlaceOrder}
+                >
+                  Finalizar Pedido
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
         <button 
           onClick={() => setActiveTab('orders')}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'orders' ? 'text-green-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activeTab === 'orders' ? 'text-green-600' : 'text-slate-400'}`}
         >
           <ClipboardList className="w-6 h-6" />
           <span className="text-[10px] font-medium">Pedidos</span>
+          {activeTab === 'orders' && (
+            <motion.div 
+              layoutId="activeTab"
+              className="absolute -bottom-1 w-1 h-1 bg-green-600 rounded-full"
+            />
+          )}
         </button>
       </div>
 

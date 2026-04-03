@@ -3,6 +3,7 @@ export interface Category {
   name: string;
   icon?: string;
   image?: string;
+  emoji?: string;
 }
 
 export interface Product {
