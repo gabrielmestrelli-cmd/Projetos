@@ -203,9 +203,8 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       (discount > 0 ? `_Desconto aplicado: R$ ${discount.toFixed(2)}_%0A` : '') +
       `%0A*Aguardando sua confirmação!* ✨`;
 
-    // Save to Supabase first
+    // Save to Supabase (Background)
     const saveOrder = async () => {
-      const loadingToast = toast.loading('Processando seu pedido...');
       try {
         const { error } = await supabase
           .from('orders')
@@ -223,29 +222,34 @@ export default function CustomerMenu({ categories, products, testimonials, promo
             }
           ]);
         
-        if (error) throw error;
-
-        // Save to my orders locally
-        const updatedMyOrders = [newOrder, ...myOrders];
-        setMyOrders(updatedMyOrders);
-        localStorage.setItem('my_orders', JSON.stringify(updatedMyOrders));
-
-        setCart([]);
-        setCustomerName('');
-        setCustomerPhone('');
-        setIsCartOpen(false);
-        
-        toast.success('Pedido registrado! Abrindo WhatsApp...', { id: loadingToast });
-        
-        const whatsappUrl = `https://api.whatsapp.com/send?phone=${profile.phone.replace(/\D/g, '')}&text=${message}`;
-        window.open(whatsappUrl, '_blank');
+        if (error) {
+          console.error('Supabase Error:', error);
+          // Don't block the user, but log it
+        }
       } catch (err) {
-        console.error('Error saving order:', err);
-        toast.error('Erro ao salvar pedido no sistema. Tente novamente.', { id: loadingToast });
+        console.error('Connection Error:', err);
       }
     };
 
+    // Execute save in background
     saveOrder();
+
+    // Clear cart and close
+    setCart([]);
+    setCustomerName('');
+    setCustomerPhone('');
+    setIsCartOpen(false);
+    
+    toast.success('Pedido finalizado! Abrindo WhatsApp...');
+    
+    // Open WhatsApp
+    const cleanPhone = profile.phone ? profile.phone.replace(/\D/g, '') : '';
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${message}`;
+    
+    // Small delay to ensure state updates before redirect
+    setTimeout(() => {
+      window.location.href = whatsappUrl;
+    }, 500);
   };
 
   return (
