@@ -31,6 +31,7 @@ export type OrderStatus = 'pending' | 'preparing' | 'delivered' | 'cancelled';
 
 export interface Order {
   id: string;
+  orderNumber?: string;
   tableNumber?: string;
   customerName: string;
   customerPhone: string;

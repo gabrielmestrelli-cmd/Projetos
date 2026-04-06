@@ -28,11 +28,11 @@ export const ICON_MAP: Record<string, any> = {
 };
 
 export const INITIAL_CATEGORIES: Category[] = [
-  { id: 'marmitas', name: 'Cardápio Essencial', icon: 'Utensils' },
-  { id: 'lasanhas', name: 'Lasanhas', icon: 'Utensils' },
-  { id: 'coxinhas', name: 'Coxinha', icon: 'Utensils' },
-  { id: 'molhos', name: 'Molhos', icon: 'Utensils' },
-  { id: 'caldos', name: 'Caldos e Sopas', icon: 'Utensils' },
+  { id: 'marmitas', name: 'Cardápio Essencial', icon: 'Utensils', emoji: '🍱' },
+  { id: 'lasanhas', name: 'Lasanhas', icon: 'Utensils', emoji: '🍝' },
+  { id: 'coxinhas', name: 'Coxinha', icon: 'Utensils', emoji: '🥟' },
+  { id: 'molhos', name: 'Molhos', icon: 'Utensils', emoji: '🥫' },
+  { id: 'caldos', name: 'Caldos e Sopas', icon: 'Utensils', emoji: '🥣' },
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [

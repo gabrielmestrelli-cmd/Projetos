@@ -23,10 +23,25 @@ interface CustomerMenuProps {
   testimonials: Testimonial[];
   promotions: Promotion[];
   profile: BusinessProfile;
+  orders: Order[];
+  userPhone: string | null;
+  onLogin: (phone: string) => void;
+  onLogout: () => void;
   onPlaceOrder: (order: Order) => void;
 }
 
-export default function CustomerMenu({ categories, products, testimonials, promotions, profile, onPlaceOrder }: CustomerMenuProps) {
+export default function CustomerMenu({ 
+  categories, 
+  products, 
+  testimonials, 
+  promotions, 
+  profile, 
+  orders,
+  userPhone,
+  onLogin,
+  onLogout,
+  onPlaceOrder 
+}: CustomerMenuProps) {
   const [searchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,20 +53,18 @@ export default function CustomerMenu({ categories, products, testimonials, promo
   const [detailLactose, setDetailLactose] = useState<'com' | 'sem'>('com');
   
   // Checkout fields
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(localStorage.getItem('customer_name') || '');
+  const [customerPhone, setCustomerPhone] = useState(userPhone || '');
+  const [loginPhone, setLoginPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao-link' | 'dinheiro'>('pix');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'menu' | 'orders'>('menu');
-  const [myOrders, setMyOrders] = useState<Order[]>([]);
 
-  // Load my orders from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('my_orders');
-    if (saved) {
-      setMyOrders(JSON.parse(saved));
-    }
-  }, []);
+  // Filter orders for the current user
+  const myOrders = useMemo(() => {
+    if (!userPhone) return [];
+    return orders.filter(o => o.customerPhone === userPhone);
+  }, [orders, userPhone]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -175,8 +188,21 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       return;
     }
 
+    // Save customer name for next time
+    localStorage.setItem('customer_name', customerName);
+    
+    // Auto-login if not logged in
+    if (!userPhone) {
+      onLogin(customerPhone);
+    }
+
+    // Generate order number here to include in WhatsApp message
+    const lastOrderNumber = localStorage.getItem('last_order_number') || '1000';
+    const nextOrderNumber = (parseInt(lastOrderNumber) + 1).toString();
+
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9),
+      orderNumber: nextOrderNumber,
       customerName,
       customerPhone,
       items: [...cart],
@@ -190,8 +216,8 @@ export default function CustomerMenu({ categories, products, testimonials, promo
     onPlaceOrder(newOrder);
 
     // WhatsApp Message
-    const adminLink = `${window.location.origin}/admin`;
     const message = `*🥗 NOVO PEDIDO - lev&fit*%0A` +
+      `*Número do Pedido: #${nextOrderNumber}*%0A` +
       `--------------------------------%0A` +
       `*👤 Cliente:* ${customerName}%0A` +
       `*📱 Telefone:* ${customerPhone}%0A` +
@@ -202,49 +228,10 @@ export default function CustomerMenu({ categories, products, testimonials, promo
       `%0A--------------------------------%0A` +
       `*💰 TOTAL: R$ ${total.toFixed(2)}*%0A` +
       (discount > 0 ? `_Desconto aplicado: R$ ${discount.toFixed(2)}_%0A` : '') +
-      `%0A*🔗 Ver no Painel:* ${adminLink}%0A` +
-      `%0A*Aguardando sua confirmação!* ✨`;
-
-    // Save to Supabase (Background)
-    const saveOrder = async () => {
-      try {
-        const { error } = await supabase
-          .from('orders')
-          .insert([
-            {
-              id: newOrder.id,
-              customer_name: newOrder.customerName,
-              customer_phone: newOrder.customerPhone,
-              items: newOrder.items,
-              total_price: newOrder.total,
-              discount: newOrder.discount,
-              payment_method: newOrder.paymentMethod,
-              status: newOrder.status,
-              created_at: newOrder.createdAt,
-            }
-          ]);
-        
-        if (error) {
-          console.error('Supabase Error:', error);
-          // Don't block the user, but log it
-        }
-      } catch (err) {
-        console.error('Connection Error:', err);
-      }
-    };
-
-    // Execute save in background
-    saveOrder();
-
-    // Update local orders history
-    const updatedMyOrders = [newOrder, ...myOrders];
-    setMyOrders(updatedMyOrders);
-    localStorage.setItem('my_orders', JSON.stringify(updatedMyOrders));
+      `%0A*Aguardando sua confirmação para combinar a entrega!* ✨`;
 
     // Clear cart and close
     setCart([]);
-    setCustomerName('');
-    setCustomerPhone('');
     setIsCartOpen(false);
     
     toast.success('Pedido finalizado! Abrindo WhatsApp...');
@@ -253,7 +240,6 @@ export default function CustomerMenu({ categories, products, testimonials, promo
     const cleanPhone = profile.phone ? profile.phone.replace(/\D/g, '') : '';
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${message}`;
     
-    // Small delay to ensure state updates before redirect
     setTimeout(() => {
       window.location.href = whatsappUrl;
     }, 500);
@@ -420,7 +406,12 @@ export default function CustomerMenu({ categories, products, testimonials, promo
         <div className="px-4 overflow-x-auto flex gap-3 scrollbar-hide py-2">
           {promotions.filter(p => p.active).map((promo) => (
             <div key={promo.id} className="min-w-[280px] h-32 relative rounded-2xl overflow-hidden shadow-sm flex-shrink-0">
-              <img src={promo.image} className="absolute inset-0 w-full h-full object-cover" alt={promo.title} />
+              <img 
+                src={promo.image} 
+                className="absolute inset-0 w-full h-full object-cover" 
+                alt={promo.title} 
+                referrerPolicy="no-referrer"
+              />
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex flex-col justify-center p-4">
                 <Badge className="w-fit bg-red-500 text-white border-none mb-1 text-[10px]">OFERTA</Badge>
                 <h3 className="text-white font-bold text-lg leading-tight">{promo.title}</h3>
@@ -440,12 +431,12 @@ export default function CustomerMenu({ categories, products, testimonials, promo
           <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === 'all' ? 'from-green-400 to-green-600 shadow-lg shadow-green-100 scale-110' : 'from-slate-200 to-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
               <div className={`w-full h-full rounded-full flex items-center justify-center text-2xl ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
-                🏠
+                🥘
               </div>
             </div>
           </div>
           <span className={`text-[11px] mt-1 transition-all ${selectedCategory === 'all' ? 'font-black text-green-600 scale-110' : 'font-medium text-slate-500'}`}>
-            Todos
+            TODOS
           </span>
         </button>
         {categories.map((cat) => {
@@ -479,19 +470,29 @@ export default function CustomerMenu({ categories, products, testimonials, promo
 
       {/* View Mode Tabs & Search Bar (Sticky Container) */}
       <div id="produtos" className="sticky top-[53px] md:top-0 bg-white z-30 border-b border-slate-100">
-        <div className="flex max-w-xs mx-auto">
+        <div className="flex max-w-xs mx-auto relative">
           <button 
             onClick={() => setViewMode('grid')}
-            className={`flex-1 flex items-center justify-center py-3 border-b-2 transition-all ${viewMode === 'grid' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400'}`}
+            className={`flex-1 flex items-center justify-center py-3 transition-all relative z-10 ${viewMode === 'grid' ? 'text-slate-900' : 'text-slate-400'}`}
           >
             <Grid className="w-6 h-6" />
           </button>
           <button 
             onClick={() => setViewMode('feed')}
-            className={`flex-1 flex items-center justify-center py-3 border-b-2 transition-all ${viewMode === 'feed' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400'}`}
+            className={`flex-1 flex items-center justify-center py-3 transition-all relative z-10 ${viewMode === 'feed' ? 'text-slate-900' : 'text-slate-400'}`}
           >
             <LayoutList className="w-6 h-6" />
           </button>
+          <motion.div 
+            layoutId="viewModeTab"
+            className="absolute bottom-0 h-0.5 bg-slate-900"
+            initial={false}
+            animate={{ 
+              left: viewMode === 'grid' ? '0%' : '50%',
+              width: '50%'
+            }}
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+          />
         </div>
 
         {/* Search Bar (Inside Sticky) */}
@@ -644,12 +645,45 @@ export default function CustomerMenu({ categories, products, testimonials, promo
           >
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-slate-900">Meus Pedidos</h2>
-              <Badge variant="outline" className="text-slate-500">
-                {myOrders.length} pedidos
-              </Badge>
+              {userPhone && (
+                <Button variant="ghost" size="sm" onClick={onLogout} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                  Sair
+                </Button>
+              )}
             </div>
 
-            {myOrders.length === 0 ? (
+            {!userPhone ? (
+              <div className="text-center py-12 space-y-6 bg-slate-50 rounded-3xl p-8 border border-slate-100">
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                  <User className="w-10 h-10 text-green-600" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-slate-900">Acesse seus pedidos</h3>
+                  <p className="text-slate-500 text-sm">Informe seu WhatsApp para visualizar seu histórico de compras.</p>
+                </div>
+                <div className="space-y-3">
+                  <Input 
+                    placeholder="(00) 00000-0000" 
+                    className="h-12 rounded-2xl bg-white border-slate-200 text-center text-lg font-medium"
+                    value={loginPhone}
+                    onChange={(e) => setLoginPhone(e.target.value)}
+                  />
+                  <Button 
+                    className="w-full h-12 bg-green-600 hover:bg-green-700 rounded-2xl font-bold text-base shadow-lg shadow-green-100"
+                    onClick={() => {
+                      if (loginPhone.length < 8) {
+                        toast.error('Informe um telefone válido');
+                        return;
+                      }
+                      onLogin(loginPhone);
+                      setCustomerPhone(loginPhone);
+                    }}
+                  >
+                    Entrar
+                  </Button>
+                </div>
+              </div>
+            ) : myOrders.length === 0 ? (
               <div className="text-center py-20 space-y-4">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
                   <ClipboardList className="w-10 h-10 text-slate-300" />
@@ -670,7 +704,7 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                     <CardHeader className="bg-slate-50/50 py-3 px-4">
                       <div className="flex justify-between items-center">
                         <div className="flex flex-col">
-                          <span className="text-xs font-mono text-slate-500">#{order.id}</span>
+                          <span className="text-xs font-bold text-green-700">Pedido #{order.orderNumber || order.id.slice(0, 4).toUpperCase()}</span>
                           {order.createdAt ? (
                             <span className="text-[10px] text-slate-400">
                               {new Date(order.createdAt).toLocaleDateString('pt-BR')} {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -1411,16 +1445,16 @@ export default function CustomerMenu({ categories, products, testimonials, promo
                   ))}
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 px-1">
                   <h3 className="font-bold text-slate-900">Seus Dados</h3>
                   <div className="grid gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="name" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
-                      <Input id="name" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                      <Input id="name" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11 px-4" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="phone" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
-                      <Input id="phone" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                      <Input id="phone" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11 px-4" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
                     </div>
                   </div>
                 </div>

@@ -116,6 +116,7 @@ export default function AdminPanel({
   // Profile Form State
   const [profileForm, setProfileForm] = useState<BusinessProfile>(profile || INITIAL_PROFILE);
   const [prevOrdersCount, setPrevOrdersCount] = useState(orders.length);
+  const [orderSearch, setOrderSearch] = useState('');
 
   useEffect(() => {
     if (orders.length > prevOrdersCount) {
@@ -652,16 +653,30 @@ export default function AdminPanel({
         </TabsContent>
         <TabsContent value="orders" className="mt-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Pedidos Recentes</CardTitle>
-              <CardDescription>Acompanhe e gerencie o status dos pedidos em tempo real.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div>
+                <CardTitle>Pedidos Recentes</CardTitle>
+                <CardDescription>Acompanhe e gerencie o status dos pedidos em tempo real.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative w-48">
+                  <ClipboardList className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input 
+                    placeholder="Buscar nº pedido..." 
+                    className="pl-9 h-9 rounded-lg text-xs"
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data/Cliente</TableHead>
+                      <TableHead>Nº / Data</TableHead>
+                      <TableHead>Cliente</TableHead>
                       <TableHead>Itens</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Pagamento</TableHead>
@@ -672,15 +687,18 @@ export default function AdminPanel({
                   <TableBody>
                     {orders.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                        <TableCell colSpan={7} className="h-24 text-center text-slate-500">
                           Nenhum pedido recebido ainda.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      orders.map((order) => (
+                      orders
+                        .filter(o => !orderSearch || o.orderNumber?.includes(orderSearch) || o.id.includes(orderSearch))
+                        .map((order) => (
                         <TableRow key={order.id}>
                           <TableCell>
                             <div className="flex flex-col">
+                              <span className="font-bold text-green-700">#{order.orderNumber || order.id.slice(0, 4).toUpperCase()}</span>
                               {order.createdAt ? (
                                 <span className="text-[10px] text-slate-400 font-mono">
                                   {new Date(order.createdAt).toLocaleDateString('pt-BR')} {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -688,23 +706,16 @@ export default function AdminPanel({
                               ) : (
                                 <span className="text-[10px] text-slate-400 font-mono italic">Data não disponível</span>
                               )}
-                              <span className="font-bold flex items-center gap-1">
-                                <User className="h-3 w-3" /> {order.customerName}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-bold flex items-center gap-1 text-sm">
+                                {order.customerName}
                               </span>
                               <span className="text-xs text-slate-500 flex items-center gap-1">
-                                <Phone className="h-3 w-3" /> {order.customerPhone}
+                                {order.customerPhone}
                                 <div className="flex gap-0.5">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-4 w-4 text-slate-400" 
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(order.customerPhone);
-                                      toast.success('Telefone copiado!');
-                                    }}
-                                  >
-                                    <ClipboardList className="h-2 w-2" />
-                                  </Button>
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
@@ -712,17 +723,6 @@ export default function AdminPanel({
                                     onClick={() => window.open(`https://wa.me/${order.customerPhone.replace(/\D/g, '')}`, '_blank')}
                                   >
                                     <MessageCircle className="h-2 w-2" />
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-6 px-2 text-[10px] border-green-200 text-green-700 hover:bg-green-50 ml-1"
-                                    onClick={() => {
-                                      const msg = `Olá ${order.customerName}! Recebemos seu pedido na *lev&fit* e já estamos preparando com todo carinho. Obrigado pela preferência! 🥗✨`;
-                                      window.open(`https://api.whatsapp.com/send?phone=${order.customerPhone.replace(/\D/g, '')}&text=${encodeURIComponent(msg)}`, '_blank');
-                                    }}
-                                  >
-                                    Confirmar
                                   </Button>
                                 </div>
                               </span>

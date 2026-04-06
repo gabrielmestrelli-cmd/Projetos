@@ -20,6 +20,7 @@ export default function App() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [profile, setProfile] = useState<BusinessProfile>(INITIAL_PROFILE);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [userPhone, setUserPhone] = useState<string | null>(localStorage.getItem('user_phone'));
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -274,10 +275,48 @@ export default function App() {
     }
   };
 
-  const addOrder = (order: Order) => {
-    const newOrders = [order, ...orders];
+  const addOrder = async (order: Order) => {
+    // Generate a simple 4-digit order number
+    const lastOrderNumber = localStorage.getItem('last_order_number') || '1000';
+    const nextOrderNumber = (parseInt(lastOrderNumber) + 1).toString();
+    localStorage.setItem('last_order_number', nextOrderNumber);
+    
+    const orderWithNumber = { ...order, orderNumber: nextOrderNumber };
+    const newOrders = [orderWithNumber, ...orders];
     setOrders(newOrders);
     localStorage.setItem('orders_data', JSON.stringify(newOrders));
+
+    // Save to Supabase (Background)
+    try {
+      await supabase
+        .from('orders')
+        .insert([
+          {
+            id: orderWithNumber.id,
+            order_number: orderWithNumber.orderNumber,
+            customer_name: orderWithNumber.customerName,
+            customer_phone: orderWithNumber.customerPhone,
+            items: orderWithNumber.items,
+            total_price: orderWithNumber.total,
+            discount: orderWithNumber.discount,
+            payment_method: orderWithNumber.paymentMethod,
+            status: orderWithNumber.status,
+            created_at: orderWithNumber.createdAt,
+          }
+        ]);
+    } catch (err) {
+      console.error('Supabase save error:', err);
+    }
+  };
+
+  const handleLogin = (phone: string) => {
+    setUserPhone(phone);
+    localStorage.setItem('user_phone', phone);
+  };
+
+  const handleLogout = () => {
+    setUserPhone(null);
+    localStorage.removeItem('user_phone');
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
@@ -326,6 +365,10 @@ export default function App() {
                   testimonials={testimonials}
                   promotions={promotions}
                   profile={profile}
+                  orders={orders}
+                  userPhone={userPhone}
+                  onLogin={handleLogin}
+                  onLogout={handleLogout}
                   onPlaceOrder={addOrder} 
                 />
               } 
