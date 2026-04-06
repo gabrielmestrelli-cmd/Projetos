@@ -28,11 +28,11 @@ export const ICON_MAP: Record<string, any> = {
 };
 
 export const INITIAL_CATEGORIES: Category[] = [
-  { id: 'marmitas', name: 'Cardápio Essencial', icon: 'Utensils', emoji: '🍱' },
-  { id: 'lasanhas', name: 'Lasanhas', icon: 'Utensils', emoji: '🍝' },
-  { id: 'coxinhas', name: 'Coxinha', icon: 'Utensils', emoji: '🥟' },
-  { id: 'molhos', name: 'Molhos', icon: 'Utensils', emoji: '🥫' },
-  { id: 'caldos', name: 'Caldos e Sopas', icon: 'Utensils', emoji: '🥣' },
+  { id: 'marmitas', name: 'Cardápio Essencial', emoji: '🍱' },
+  { id: 'lasanhas', name: 'Lasanhas', emoji: '🍝' },
+  { id: 'coxinhas', name: 'Coxinha', emoji: '🍗' },
+  { id: 'molhos', name: 'Molhos', emoji: '🍯' },
+  { id: 'caldos', name: 'Caldos e Sopas', emoji: '🥣' },
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [
@@ -628,10 +628,10 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
 ];
 
 export const INITIAL_PROFILE: BusinessProfile = {
-  name: 'lev & fit 🌿',
+  name: 'Lev & Fit 🌿',
   instagram: 'levfitcongelados',
   phone: '5548984968098',
-  bio: 'Marmitas Congeladas Saudáveis 🥗\n📍 Entregamos em Floripa e Grande Florianópolis\n🚚 Entrega a combinar • 🏠 Retirada no local',
+  bio: 'Marmitas Congeladas Saudáveis 🥗\n📍 Entregamos em Floripa e Grande Florianópolis\n🚚Entrega a combinar • 🏠Retirada no local',
   stats: {
     posts: 28,
     followers: '2.021',

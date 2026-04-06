@@ -298,18 +298,18 @@ export default function CustomerMenu({
                   Pedir Agora
                 </Button>
                 <Button 
-                  variant="secondary" 
+                  variant="outline" 
                   size="sm" 
-                  className="h-9 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
+                  className="h-9 px-3 font-semibold border-slate-200 hover:bg-slate-50 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
                   onClick={() => window.open(`https://wa.me/${profile.phone.replace(/\D/g, '')}`, '_blank')}
                 >
                   <MessageCircle className="h-3 w-3" />
                   WhatsApp
                 </Button>
                 <Button 
-                  variant="secondary" 
+                  variant="outline" 
                   size="sm" 
-                  className="h-9 px-3 font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
+                  className="h-9 px-3 font-semibold border-slate-200 hover:bg-slate-50 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
                   onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
                 >
                   <Instagram className="h-3 w-3" />
@@ -331,9 +331,8 @@ export default function CustomerMenu({
                     href={`https://instagram.com/${profile.instagram}`} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="text-blue-600 font-semibold hover:underline flex items-center gap-1"
+                    className="text-blue-600 font-semibold hover:underline"
                   >
-                    <Instagram className="h-3 w-3" />
                     @{profile.instagram}
                   </a>
                 </div>
@@ -373,9 +372,8 @@ export default function CustomerMenu({
                   href={`https://instagram.com/${profile.instagram}`} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="text-blue-600 font-semibold hover:underline flex items-center gap-1"
+                  className="text-blue-600 font-semibold hover:underline"
                 >
-                  <Instagram className="h-3 w-3" />
                   @{profile.instagram}
                 </a>
               </div>
@@ -428,14 +426,14 @@ export default function CustomerMenu({
           onClick={() => setSelectedCategory('all')}
           className="flex flex-col items-center gap-2 flex-shrink-0 group"
         >
-          <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === 'all' ? 'from-green-400 to-green-600 shadow-lg shadow-green-100 scale-110' : 'from-slate-200 to-slate-200'} transition-all duration-300`}>
+          <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
               <div className={`w-full h-full rounded-full flex items-center justify-center text-2xl ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                 🥘
               </div>
             </div>
           </div>
-          <span className={`text-[11px] mt-1 transition-all ${selectedCategory === 'all' ? 'font-black text-green-600 scale-110' : 'font-medium text-slate-500'}`}>
+          <span className={`text-[11px] mt-1 transition-all ${selectedCategory === 'all' ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
             TODOS
           </span>
         </button>
@@ -447,7 +445,7 @@ export default function CustomerMenu({
               onClick={() => setSelectedCategory(cat.id)}
               className="flex flex-col items-center gap-2 flex-shrink-0 group"
             >
-              <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr ${selectedCategory === cat.id ? 'from-green-400 to-green-600 shadow-lg shadow-green-100 scale-110' : 'from-slate-200 to-slate-200'} transition-all duration-300`}>
+              <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                     {cat.image ? (
@@ -460,7 +458,7 @@ export default function CustomerMenu({
                   </div>
                 </div>
               </div>
-              <span className={`text-[11px] mt-1 transition-all ${selectedCategory === cat.id ? 'font-black text-green-600 scale-110' : 'font-medium text-slate-500'}`}>
+              <span className={`text-[11px] mt-1 transition-all ${selectedCategory === cat.id ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
                 {cat.name}
               </span>
             </button>
@@ -500,7 +498,7 @@ export default function CustomerMenu({
           <div className="relative max-w-md mx-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input 
-              placeholder="O que você quer comer hoje?" 
+              placeholder="O que você quer comer hoie?" 
               className="pl-10 h-10 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-green-500 shadow-none transition-all focus:bg-white"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
