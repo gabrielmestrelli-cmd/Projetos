@@ -79,13 +79,16 @@ export default function App() {
         // Fetch Categories
         const { data: catData } = await supabase.from('categories').select('*');
         if (catData && catData.length > 0) {
-          setCategories(catData.map(c => ({
-            id: c.id,
-            name: c.name,
-            icon: c.icon || 'Utensils',
-            emoji: c.emoji || '',
-            image: c.image_url || ''
-          })));
+          setCategories(catData.map(c => {
+            const initial = INITIAL_CATEGORIES.find(ic => ic.id === c.id);
+            return {
+              id: c.id,
+              name: c.name,
+              icon: c.icon || initial?.icon || 'Utensils',
+              emoji: c.emoji || initial?.emoji || '',
+              image: c.image_url || initial?.image || ''
+            };
+          }));
         }
 
         // Fetch Products

@@ -336,12 +336,6 @@ export default function CustomerMenu({
                     @{profile.instagram}
                   </a>
                 </div>
-                <br />
-                {profile.isOpen ? (
-                  <span className="text-green-600 font-bold">● Aberto agora</span>
-                ) : (
-                  <span className="text-red-600 font-bold">● Fechado no momento</span>
-                )}
               </div>
             </div>
           </div>
@@ -377,13 +371,6 @@ export default function CustomerMenu({
                   @{profile.instagram}
                 </a>
               </div>
-              <div className="mt-1">
-                {profile.isOpen ? (
-                  <span className="text-green-600 font-bold">● Aberto agora</span>
-                ) : (
-                  <span className="text-red-600 font-bold">● Fechado no momento</span>
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -399,6 +386,21 @@ export default function CustomerMenu({
             exit={{ opacity: 0, y: -10 }}
             className="space-y-0 pb-24"
           >
+            {/* Status Indicator */}
+            <div className="px-4 mb-4 max-w-4xl mx-auto">
+              {profile.isOpen ? (
+                <span className="text-green-600 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+                  Aberto agora
+                </span>
+              ) : (
+                <span className="text-red-600 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-600" />
+                  Fechado no momento
+                </span>
+              )}
+            </div>
+
             {/* iFood Style Banners (Instagram Highlights style) */}
       {promotions.length > 0 && (
         <div className="px-4 overflow-x-auto flex gap-3 scrollbar-hide py-2">
