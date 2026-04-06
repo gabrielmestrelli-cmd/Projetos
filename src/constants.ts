@@ -28,11 +28,11 @@ export const ICON_MAP: Record<string, any> = {
 };
 
 export const INITIAL_CATEGORIES: Category[] = [
-  { id: 'marmitas', name: 'Cardápio Essencial', icon: 'Utensils', emoji: '🥗' },
-  { id: 'lasanhas', name: 'Lasanhas', icon: 'CookingPot', emoji: '🍝' },
-  { id: 'coxinhas', name: 'Coxinha', icon: 'Drumstick', emoji: '🥟' },
-  { id: 'molhos', name: 'Molhos', icon: 'Droplets', emoji: '🥫' },
-  { id: 'caldos', name: 'Caldos e Sopas', icon: 'Soup', emoji: '🥣' },
+  { id: 'marmitas', name: 'Cardápio Essencial', icon: 'Utensils' },
+  { id: 'lasanhas', name: 'Lasanhas', icon: 'Utensils' },
+  { id: 'coxinhas', name: 'Coxinha', icon: 'Utensils' },
+  { id: 'molhos', name: 'Molhos', icon: 'Utensils' },
+  { id: 'caldos', name: 'Caldos e Sopas', icon: 'Utensils' },
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [
@@ -628,7 +628,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
 ];
 
 export const INITIAL_PROFILE: BusinessProfile = {
-  name: 'lev&fit 🌿',
+  name: 'lev & fit 🌿',
   instagram: 'levfitcongelados',
   phone: '5548984968098',
   bio: 'Marmitas Congeladas Saudáveis 🥗\n📍 Entregamos em Floripa e Grande Florianópolis\n🚚 Entrega a combinar • 🏠 Retirada no local',

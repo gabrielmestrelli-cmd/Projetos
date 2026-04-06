@@ -32,7 +32,11 @@ export default function App() {
 
     if (savedMenu) {
       const parsed = JSON.parse(savedMenu) as MenuData;
-      finalCategories = parsed.categories || INITIAL_CATEGORIES;
+      // Sync categories from INITIAL_CATEGORIES to ensure icons and names match the latest version
+      finalCategories = INITIAL_CATEGORIES.map(ic => {
+        const saved = (parsed.categories || []).find(sc => sc.id === ic.id);
+        return saved ? { ...ic, name: saved.name || ic.name } : ic;
+      });
       
       // Sync descriptions from INITIAL_PRODUCTS to ensure "500g" and other updates are applied
       // while keeping user-modified fields like price or image if they were changed in admin
@@ -300,7 +304,7 @@ export default function App() {
             <div className="flex-1 md:flex-none flex justify-center md:justify-start">
               <Link to="/" className="flex items-center gap-2 font-bold text-xl text-green-600">
                 <Leaf className="h-6 w-6" />
-                <span>lev<span className="text-slate-900">&fit</span></span>
+                <span>lev <span className="text-slate-900">& fit</span></span>
               </Link>
             </div>
             <nav className="flex items-center gap-4 absolute right-4 md:relative md:right-0">
