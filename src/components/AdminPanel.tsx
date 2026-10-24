@@ -18,6 +18,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playCashRegister } from '../lib/sound';
 import { newId } from '../lib/id';
+
+// Conta de admin no Supabase. O e-mail não é segredo; a senha é conferida pelo Supabase, nunca fica no código.
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL as string | undefined) || 'bielmaestrelli@hotmail.com';
 import { whatsappLink, maskPhone } from '../lib/phone';
 import { formatBRL } from '../lib/pricing';
 import { supabase } from '../lib/supabase';
@@ -51,7 +54,6 @@ export default function AdminPanel({
   onAdminLogin,
   onAdminLogout
 }: AdminPanelProps) {
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState('orders');
@@ -180,7 +182,7 @@ export default function AdminPanel({
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    const error = await onAdminLogin(email.trim(), password);
+    const error = await onAdminLogin(ADMIN_EMAIL, password);
     setIsLoggingIn(false);
     if (error) {
       toast.error(error);
@@ -211,26 +213,16 @@ export default function AdminPanel({
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input 
-                  id="email"
-                  type="email" 
-                  autoComplete="username"
-                  placeholder="seu@email.com" 
-                  className="h-12 rounded-xl"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
+              {/* campo escondido: ajuda o gerenciador de senhas do navegador */}
+              <input type="hidden" name="username" autoComplete="username" value={ADMIN_EMAIL} readOnly />
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
                 <Input 
                   id="password"
                   type="password" 
                   autoComplete="current-password"
-                  placeholder="Digite sua senha..." 
+                  autoFocus
+                  placeholder="Digite a senha do painel" 
                   className="h-12 rounded-xl"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -243,7 +235,7 @@ export default function AdminPanel({
             </form>
           </CardContent>
           <CardFooter className="bg-slate-50 p-4 text-center">
-            <p className="text-xs text-slate-400 w-full">Acesso apenas para administradores cadastrados no Supabase.</p>
+            <p className="text-xs text-slate-400 w-full">Acesso restrito à equipe Lev & Fit.</p>
           </CardFooter>
         </Card>
       </div>

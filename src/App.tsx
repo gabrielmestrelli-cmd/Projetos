@@ -199,7 +199,7 @@ export default function App() {
 
   const adminLogin = async (email: string, password: string): Promise<string | null> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return 'E-mail ou senha incorretos';
+    if (error) return 'Senha incorreta';
     const { data: ok } = await supabase.rpc('is_admin');
     if (ok !== true) {
       await supabase.auth.signOut();

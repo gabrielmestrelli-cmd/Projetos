@@ -71,7 +71,7 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
 Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`), `testimonials`, `promotions`, `orders`, `admins`.
 
 - O cardápio é lido do Supabase; `localStorage` (`menu_data`) só serve de cache para abrir rápido.
-- **Admin** entra com e-mail e senha pelo **Supabase Auth**. Só quem está na tabela `admins` é admin (`is_admin()`). Nunca volte a usar senha escrita no código.
+- **Admin**: o painel pede **só a senha**; o e-mail fica fixo em `VITE_ADMIN_EMAIL` (padrão `bielmaestrelli@hotmail.com`) e o login é feito pelo **Supabase Auth**. Para trocar a senha, mude a senha desse usuário no Supabase, não no código. Só quem está na tabela `admins` é admin (`is_admin()`). Nunca volte a usar senha escrita no código.
 - **RLS** (ver `supabase/seguranca.sql`):
   - cardápio: leitura pública, escrita só admin;
   - `orders`: qualquer um pode **criar** pedido (pela função `criar_pedido`, que força `status = 'pending'`); só admin lê/altera;
