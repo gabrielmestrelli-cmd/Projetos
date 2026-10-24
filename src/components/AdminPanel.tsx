@@ -17,7 +17,7 @@ import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, C
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
-import { playCashRegister } from '../lib/sound';
+import { playCashRegister, preloadCashRegister } from '../lib/sound';
 import { newId } from '../lib/id';
 
 // Conta de admin no Supabase. O e-mail não é segredo; a senha é conferida pelo Supabase, nunca fica no código.
@@ -137,6 +137,13 @@ export default function AdminPanel({
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState<BusinessProfile>(profile || INITIAL_PROFILE);
+  // Deixa o som da caixa pronto: o navegador libera áudio no primeiro clique na página
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unlock = () => { preloadCashRegister(); };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, [isAdmin]);
   // Quando o perfil chega do banco, atualiza o formulário
   useEffect(() => {
     if (profile) setProfileForm(profile);

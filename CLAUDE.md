@@ -46,10 +46,11 @@ src/
     pricing.ts          # REGRAS DE DESCONTO e total do carrinho (summarizeCart)
     phone.ts            # máscara, validação e link do WhatsApp
     id.ts               # newId() (UUID com plano B fora de https)
-    sound.ts            # som de caixa registradora (Web Audio, sem arquivo)
+    sound.ts            # toca public/sounds/caixa-registradora.mp3 (plano B: som sintético)
   constants.ts          # cardápio/perfil iniciais (fallback se o banco estiver vazio)
   types.ts              # tipos (Order, Product, Category, ...)
   productImages.ts
+public/                 # logo.png, logo-icone.png, perfil.jpg, favicon, ícones do celular, sounds/
 supabase/instalar.sql   # INSTALAÇÃO COMPLETA num projeto novo (tabelas + segurança + cardápio)
 supabase/seguranca.sql  # só regras RLS/funções (para um banco que já tem as tabelas)
 scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + constants.ts
