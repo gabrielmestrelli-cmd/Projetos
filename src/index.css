@@ -128,3 +128,9 @@
     @apply font-sans;
     }
 }
+/* Esconde a barra de rolagem das faixas horizontais (ofertas, stories, categorias) */
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}
