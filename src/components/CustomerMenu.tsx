@@ -848,15 +848,13 @@ export default function CustomerMenu({
 
       {/* Products Display */}
       <div className="md:px-4 md:py-4">
-        <AnimatePresence>
+        <>
           {viewMode === 'feed' ? (
             <div className="divide-y divide-slate-100 md:grid md:grid-cols-2 md:gap-x-4 md:divide-y-0">
               {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'feed')}
                 <motion.div
                   key={product.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
+                  initial={false}
                   className="bg-white p-4 flex gap-4 items-start hover:bg-slate-50 transition-colors cursor-pointer md:border-b md:border-slate-100"
                 >
                   <div className="flex-1 space-y-3" onClick={() => setSelectedProduct(product)}>
@@ -920,10 +918,7 @@ export default function CustomerMenu({
               {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'grid')}
                 <motion.div
                   key={product.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  initial={false}
                   className="relative aspect-square group cursor-pointer"
                   onClick={() => setSelectedProduct(product)}
                 >
@@ -965,7 +960,12 @@ export default function CustomerMenu({
               </Fragment>))}
             </div>
           )}
-        </AnimatePresence>
+          {filteredProducts.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-slate-500">
+              {searchQuery ? `Nenhum produto encontrado para "${searchQuery}".` : 'Nenhum produto nesta categoria por enquanto.'}
+            </p>
+          )}
+        </>
             </div>
             {/* Avaliações reais do Google */}
             {reviews.length > 0 && (
