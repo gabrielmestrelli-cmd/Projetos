@@ -9,11 +9,19 @@ export const PRICING = {
   coxinhaCombo: { qty: 3, price: 24 },
 };
 
-export const isMarmita = (item: { productId?: string; id?: string; categoryId?: string }) =>
-  item.categoryId === 'marmitas' || (item.productId ?? item.id ?? '').startsWith('mar-');
+/** Entra no combo de 10/15 unidades: marmitas tradicionais e caldos/sopas (mesma tabela no cardápio do Instagram). */
+export const isMarmita = (item: { productId?: string; id?: string; categoryId?: string }) => {
+  const id = item.productId ?? item.id ?? '';
+  return item.categoryId === 'marmitas' || item.categoryId === 'caldos' || id.startsWith('mar-') || id.startsWith('cal-');
+};
 
+/** Salgados (coxinha e kibe): cada 3 saem pelo preço do combo. */
 export const isCoxinha = (item: { productId?: string; id?: string; categoryId?: string }) =>
   item.categoryId === 'coxinhas' || (item.productId ?? item.id ?? '').startsWith('cox-');
+
+/** Salgado que tem opção com/sem glúten (o kibe "contém glúten", então não tem). */
+export const hasGlutenOption = (product: { id: string; categoryId?: string; description?: string }) =>
+  isCoxinha(product) && !/cont[ée]m gl[úu]ten/i.test(product.description ?? '');
 
 export interface CartSummary {
   subtotal: number;

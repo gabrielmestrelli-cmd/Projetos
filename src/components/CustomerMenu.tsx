@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { summarizeCart, isMarmita, isCoxinha, formatBRL, PRICING } from '../lib/pricing';
+import { summarizeCart, isMarmita, isCoxinha, hasGlutenOption, formatBRL, PRICING } from '../lib/pricing';
 import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/phone';
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
@@ -126,7 +126,7 @@ export default function CustomerMenu({
   /** Peso escrito na descrição (ex.: "350g"), para o selo do prato */
   const weightOf = (product: Product) => product.description.match(/\b(\d{2,4})\s?(g|kg|ml|l)\b/i)?.[0].replace(/\s/, '') ?? null;
 
-  const hasOptions = (product: Product) => isCoxinha(product) || product.categoryId === 'marmitas';
+  const hasOptions = (product: Product) => hasGlutenOption(product) || product.categoryId === 'marmitas';
 
   const stories = useMemo(() => orderStories(promotions), [promotions]);
 
@@ -331,7 +331,7 @@ export default function CustomerMenu({
         <SheetDescription className="text-sm">
           {summary.marmitaTierPrice !== null ? (
             <span className="block font-bold text-green-700">
-              Combo ativo: marmitas por {formatBRL(summary.marmitaTierPrice)} cada 🎉
+              Combo ativo: marmitas e caldos por {formatBRL(summary.marmitaTierPrice)} cada 🎉
               {summary.marmitasToNextTier !== null && summary.nextTierPrice !== null && (
                 <span className="block font-medium text-slate-500">
                   Mais {summary.marmitasToNextTier} e cada uma sai por {formatBRL(summary.nextTierPrice)}
@@ -340,13 +340,13 @@ export default function CustomerMenu({
             </span>
           ) : summary.marmitasToNextTier !== null && summary.nextTierPrice !== null && marmitaCount > 0 ? (
             <span className="block">
-              Faltam <strong>{summary.marmitasToNextTier} marmitas</strong> para pagar {formatBRL(summary.nextTierPrice)} em cada
+              Faltam <strong>{summary.marmitasToNextTier} marmitas ou caldos</strong> para pagar {formatBRL(summary.nextTierPrice)} em cada
             </span>
           ) : (
-            <span className="block">10 marmitas saem por R$ 20 cada, 15 por R$ 19 cada</span>
+            <span className="block">10 marmitas ou caldos saem por R$ 20 cada, 15 por R$ 19 cada</span>
           )}
           {coxinhaCount >= PRICING.coxinhaCombo.qty && (
-            <span className="block font-bold text-orange-600">Oferta coxinha: 3 por {formatBRL(PRICING.coxinhaCombo.price)} 🥟</span>
+            <span className="block font-bold text-orange-600">Oferta salgados: 3 por {formatBRL(PRICING.coxinhaCombo.price)} 🥟</span>
           )}
         </SheetDescription>
       </SheetHeader>
@@ -1142,7 +1142,7 @@ export default function CustomerMenu({
                   </div>
                 )}
 
-                {isCoxinha(selectedProduct) && (
+                {hasGlutenOption(selectedProduct) && (
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Leaf className="w-3 h-3" />
@@ -1211,7 +1211,7 @@ export default function CustomerMenu({
                     className="w-full bg-green-600 hover:bg-green-700 text-white h-14 rounded-xl font-bold shadow-lg shadow-green-200 transition-all active:scale-95 text-lg"
                     onClick={() => {
                       let notes: string | undefined = undefined;
-                      if (isCoxinha(selectedProduct)) {
+                      if (hasGlutenOption(selectedProduct)) {
                         notes = detailGluten === 'com' ? 'Com Glúten' : 'Sem Glúten';
                       } else if (selectedProduct.categoryId === 'marmitas') {
                         notes = detailLactose === 'com' ? 'Com Lactose' : 'Sem Lactose';
