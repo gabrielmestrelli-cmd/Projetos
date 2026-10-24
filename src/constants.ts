@@ -641,7 +641,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
     id: '3',
     title: 'Oferta Coxinha e Kibe',
     description: 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!',
-    image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=1200&auto=format&fit=crop',
+    image: '/produtos/coxinha.jpg',
     active: true,
     createdAt: new Date().toISOString(),
   },

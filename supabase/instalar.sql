@@ -308,5 +308,5 @@ insert into public.promotions (id, title, description, image_url, is_active, is_
   ('lancamento-sucos', 'Chegaram os Sucos Lev & Fit!', 'Sucos naturais, feitos pra acompanhar suas marmitas. Peça junto no seu pedido!', 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?q=80&w=1080&auto=format&fit=crop', true, true, 'Quero provar'),
   ('1', 'Combo 10 Marmitas', '10 marmitas ou caldos (pode misturar) por R$ 200 — sai R$ 20,00 cada!', 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1200&auto=format&fit=crop', true, false, null),
   ('2', 'Combo 15 Marmitas', '15 marmitas ou caldos (pode misturar) por R$ 285 — sai R$ 19,00 cada!', 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1200&auto=format&fit=crop', true, false, null),
-  ('3', 'Oferta Coxinha e Kibe', 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!', 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=1200&auto=format&fit=crop', true, false, null)
+  ('3', 'Oferta Coxinha e Kibe', 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!', '/produtos/coxinha.jpg', true, false, null)
 on conflict (id) do nothing;
