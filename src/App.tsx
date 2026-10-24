@@ -4,7 +4,7 @@
  */
 
 import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import CustomerMenu from './components/CustomerMenu';
 // O painel só é baixado por quem abre /admin (o cardápio fica mais leve)
@@ -24,7 +24,116 @@ export default function App() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [profile, setProfile] = useState<BusinessProfile>(INITIAL_PROFILE);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [instagramStories, setInstagramStories] = useState<Promotion[]>([]);
+  const [ordersTick, setOrdersTick] = useState(0);
   const [userPhone, setUserPhone] = useState<string | null>(localStorage.getItem('user_phone'));
+
+  // Busca tudo do Supabase (também usado pelo botão "Atualizar tudo" do painel)
+  const fetchAllData = useCallback(async () => {
+    try {
+      // Fetch Categories
+      const { data: catData } = await supabase.from('categories').select('*');
+      if (catData && catData.length > 0) {
+        setCategories(catData.map(c => {
+          const initial = INITIAL_CATEGORIES.find(ic => ic.id === c.id);
+          return {
+            id: c.id,
+            name: c.name,
+            icon: c.icon || initial?.icon || 'Utensils',
+            emoji: c.emoji || initial?.emoji || '',
+            image: c.image_url || initial?.image || ''
+          };
+        }));
+      }
+
+      // Fetch Products
+      const { data: prodData } = await supabase.from('products').select('*');
+      if (prodData && prodData.length > 0) {
+        setProducts(prodData.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || '',
+          price: Number(p.price),
+          categoryId: p.category_id,
+          image: p.image_url || '',
+          available: p.is_active ?? true,
+          type: p.type === 'pronta-entrega' ? 'pronta-entrega' : 'encomenda',
+          ingredients: Array.isArray(p.ingredients) && p.ingredients.length ? p.ingredients : undefined,
+          tags: p.tags || []
+        })));
+      }
+
+      // Fetch Profile
+      const { data: profData } = await supabase.from('store_profile').select('*').single();
+      if (profData) {
+        setProfile(prev => ({
+          ...prev,
+          name: profData.name || prev.name,
+          description: profData.description || prev.description,
+          phone: profData.phone || prev.phone,
+          address: profData.address || prev.address,
+          instagram: profData.instagram_url || prev.instagram,
+          deliveryFee: profData.delivery_fee != null ? Number(profData.delivery_fee) : prev.deliveryFee,
+          bio: profData.bio ?? prev.bio,
+          isOpen: profData.is_open ?? prev.isOpen,
+          stats: profData.stats ? { ...prev.stats, ...profData.stats } : prev.stats,
+          profilePicture: profData.profile_picture ?? prev.profilePicture,
+          delivery: profData.delivery ? { ...DEFAULT_DELIVERY, ...profData.delivery } : prev.delivery,
+          google: profData.google ?? prev.google,
+        }));
+      }
+
+      // Fetch Testimonials
+      const { data: testData } = await supabase.from('testimonials').select('*');
+      if (testData && testData.length > 0) {
+        setTestimonials(testData.map(t => ({
+          id: t.id,
+          name: t.name,
+          comment: t.comment,
+          rating: t.rating,
+          avatar: t.avatar_url || '',
+          createdAt: t.created_at,
+          source: t.source === 'google' ? 'google' as const : undefined
+        })));
+      }
+
+      // Fetch Promotions
+      const { data: promData } = await supabase.from('promotions').select('*');
+      if (promData && promData.length > 0) {
+        setPromotions(promData.map(p => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          image: p.image_url || '',
+          active: p.is_active ?? true,
+          createdAt: p.created_at,
+          isLaunch: !!p.is_launch,
+          ctaLabel: p.cta_label || undefined,
+        })));
+      }
+
+      // Stories do Instagram (copiados pela função instagram-sync; somem depois de 24 h)
+      const { data: igData } = await supabase
+        .from('instagram_stories')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('taken_at', { ascending: true });
+      setInstagramStories((igData || []).map(st => ({
+        id: `ig-${st.id}`,
+        title: 'Story do Instagram',
+        description: '',
+        image: st.media_url,
+        active: true,
+        createdAt: st.taken_at,
+        source: 'instagram' as const,
+        mediaType: st.media_type === 'VIDEO' ? 'VIDEO' as const : 'IMAGE' as const,
+        permalink: st.permalink || undefined,
+      })));
+    } catch (err) {
+      console.error('Supabase fetch error:', err);
+    }
+  }, []);
+
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -67,93 +176,6 @@ export default function App() {
     // Pedidos antigos não ficam mais guardados no navegador (privacidade)
     localStorage.removeItem('orders_data');
 
-    // Fetch from Supabase
-    const fetchAllData = async () => {
-      try {
-        // Fetch Categories
-        const { data: catData } = await supabase.from('categories').select('*');
-        if (catData && catData.length > 0) {
-          setCategories(catData.map(c => {
-            const initial = INITIAL_CATEGORIES.find(ic => ic.id === c.id);
-            return {
-              id: c.id,
-              name: c.name,
-              icon: c.icon || initial?.icon || 'Utensils',
-              emoji: c.emoji || initial?.emoji || '',
-              image: c.image_url || initial?.image || ''
-            };
-          }));
-        }
-
-        // Fetch Products
-        const { data: prodData } = await supabase.from('products').select('*');
-        if (prodData && prodData.length > 0) {
-          setProducts(prodData.map(p => ({
-            id: p.id,
-            name: p.name,
-            description: p.description || '',
-            price: Number(p.price),
-            categoryId: p.category_id,
-            image: p.image_url || '',
-            available: p.is_active ?? true,
-            type: p.type === 'pronta-entrega' ? 'pronta-entrega' : 'encomenda',
-            ingredients: Array.isArray(p.ingredients) && p.ingredients.length ? p.ingredients : undefined,
-            tags: p.tags || []
-          })));
-        }
-
-        // Fetch Profile
-        const { data: profData } = await supabase.from('store_profile').select('*').single();
-        if (profData) {
-          setProfile(prev => ({
-            ...prev,
-            name: profData.name || prev.name,
-            description: profData.description || prev.description,
-            phone: profData.phone || prev.phone,
-            address: profData.address || prev.address,
-            instagram: profData.instagram_url || prev.instagram,
-            deliveryFee: profData.delivery_fee != null ? Number(profData.delivery_fee) : prev.deliveryFee,
-            bio: profData.bio ?? prev.bio,
-            isOpen: profData.is_open ?? prev.isOpen,
-            stats: profData.stats ? { ...prev.stats, ...profData.stats } : prev.stats,
-            profilePicture: profData.profile_picture ?? prev.profilePicture,
-            delivery: profData.delivery ? { ...DEFAULT_DELIVERY, ...profData.delivery } : prev.delivery,
-          }));
-        }
-
-        // Fetch Testimonials
-        const { data: testData } = await supabase.from('testimonials').select('*');
-        if (testData && testData.length > 0) {
-          setTestimonials(testData.map(t => ({
-            id: t.id,
-            name: t.name,
-            comment: t.comment,
-            rating: t.rating,
-            avatar: t.avatar_url || '',
-            createdAt: t.created_at
-          })));
-        }
-
-        // Fetch Promotions
-        const { data: promData } = await supabase.from('promotions').select('*');
-        if (promData && promData.length > 0) {
-          setPromotions(promData.map(p => ({
-            id: p.id,
-            title: p.title,
-            description: p.description,
-            image: p.image_url || '',
-            active: p.is_active ?? true,
-            createdAt: p.created_at,
-            isLaunch: !!p.is_launch,
-            ctaLabel: p.cta_label || undefined,
-          })));
-        }
-
-      } catch (err) {
-        console.error('Supabase fetch error:', err);
-      }
-    };
-
     fetchAllData();
 
     // Subscribe to real-time updates
@@ -164,6 +186,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_profile' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'promotions' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'instagram_stories' }, () => fetchAllData())
       .subscribe();
 
     return () => {
@@ -261,7 +284,13 @@ export default function App() {
       if (channel) supabase.removeChannel(channel);
       if (timer) clearInterval(timer);
     };
-  }, [isAdmin, userPhone]);
+  }, [isAdmin, userPhone, ordersTick]);
+
+  // Botão "Atualizar tudo" do painel: recarrega cardápio, perfil, stories e pedidos
+  const refreshAll = async () => {
+    await fetchAllData();
+    setOrdersTick(t => t + 1);
+  };
 
   // Save data to localStorage and Supabase when it changes
   const updateMenu = async (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
@@ -325,6 +354,7 @@ export default function App() {
         stats: newProfile.stats,
         profile_picture: newProfile.profilePicture || null,
         delivery: newProfile.delivery ?? null,
+        google: newProfile.google ?? null,
       }) : null,
       testsToSave.length === 0 ? skip : supabase.from('testimonials').upsert(testsToSave.map(t => ({
         id: t.id,
@@ -333,6 +363,7 @@ export default function App() {
         rating: t.rating,
         avatar_url: t.avatar,
         created_at: t.createdAt,
+        source: t.source ?? null,
       }))),
       promsToSave.length === 0 ? skip : supabase.from('promotions').upsert(promsToSave.map(p => ({
         id: p.id,
@@ -456,6 +487,7 @@ export default function App() {
                   products={products} 
                   testimonials={testimonials}
                   promotions={promotions}
+                  instagramStories={instagramStories}
                   profile={profile}
                   orders={orders}
                   userPhone={userPhone}
@@ -482,6 +514,7 @@ export default function App() {
                   authChecked={authChecked}
                   onAdminLogin={adminLogin}
                   onAdminLogout={adminLogout}
+                  onRefreshAll={refreshAll}
                 />
                 </Suspense>
               } 

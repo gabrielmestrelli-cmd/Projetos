@@ -226,6 +226,70 @@ end $$;
 --      "Allow new users to sign up" para ninguém criar conta sozinho.
 -- =====================================================================
 
+-- 9) Avaliações do Google e Instagram ---------------------------------
+alter table public.testimonials add column if not exists source text;
+alter table public.store_profile add column if not exists google jsonb;
+
+-- Stories copiados do Instagram (a função instagram-sync escreve; todo mundo lê)
+create table if not exists public.instagram_stories (
+  id text primary key,
+  media_type text,
+  media_url text not null,
+  permalink text,
+  taken_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  synced_at timestamptz not null default now()
+);
+alter table public.instagram_stories enable row level security;
+drop policy if exists "stories publicos" on public.instagram_stories;
+create policy "stories publicos" on public.instagram_stories for select using (true);
+do $$ begin
+  alter publication supabase_realtime add table public.instagram_stories;
+exception when others then null;
+end $$;
+
+alter table public.store_profile add column if not exists instagram_synced_at timestamptz;
+
+-- Token do Instagram: ninguém lê pelo site (sem política de leitura); só o servidor
+create table if not exists public.instagram_config (
+  id int primary key default 1 check (id = 1),
+  access_token text,
+  token_refreshed_at timestamptz,
+  username text,
+  last_run_at timestamptz,
+  last_error text,
+  updated_at timestamptz not null default now()
+);
+alter table public.instagram_config enable row level security;
+
+-- O admin cola o token pelo painel
+create or replace function public.salvar_token_instagram(token text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Só o admin pode conectar o Instagram'; end if;
+  insert into public.instagram_config (id, access_token, token_refreshed_at, last_error, updated_at)
+  values (1, nullif(trim(token), ''), now(), null, now())
+  on conflict (id) do update set access_token = excluded.access_token, token_refreshed_at = now(), last_error = null, updated_at = now();
+end $$;
+revoke all on function public.salvar_token_instagram(text) from public, anon;
+grant execute on function public.salvar_token_instagram(text) to authenticated;
+
+-- O painel vê se está conectado, sem ver o token
+create or replace function public.status_instagram()
+returns json language sql security definer set search_path = public as $$
+  select case when not public.is_admin() then null else
+    json_build_object(
+      'conectado', coalesce((select access_token is not null from public.instagram_config where id = 1), false),
+      'usuario', (select username from public.instagram_config where id = 1),
+      'ultima_vez', (select last_run_at from public.instagram_config where id = 1),
+      'erro', (select last_error from public.instagram_config where id = 1)
+    ) end
+$$;
+grant execute on function public.status_instagram() to authenticated;
+
+
+-- O agendamento automático (a cada 15 min) está em supabase/instagram.sql
+
 -- 9) Cardápio inicial (de src/constants.ts) ----------------------------
 insert into public.categories (id, name, icon, emoji, image_url) values
   ('marmitas', 'Tradicionais', null, '🍱', null),
@@ -300,13 +364,25 @@ insert into public.store_profile (id, name, description, phone, address, instagr
 on conflict (id) do nothing;
 
 insert into public.testimonials (id, name, comment, rating, avatar_url) values
-  ('1', 'Mariana Silva', 'As marmitas são deliciosas e super práticas para o meu dia a dia corrido!', 5, 'https://i.pravatar.cc/150?u=mariana'),
-  ('2', 'João Pedro', 'Melhor custo-benefício que já encontrei. O desconto progressivo ajuda muito!', 5, 'https://i.pravatar.cc/150?u=joao')
+  ('g-02', 'Greice Balbinot', 'Refeições com um sabor incrível e preparo impecável. E ainda tem a praticidade de ter refeições prontas à mão sempre que precisar! Adorei! 😍👏🏻👏🏻👏🏻', 5, 'https://lh3.googleusercontent.com/a/ACg8ocJNRsFhsM45PzVKSvxPI3DI19VdGd4cj77PebmmZjXSP52F0A=w96-h96-p-rp-mo-br100'),
+  ('g-03', 'Jefferson da Silva Bitencourt', 'Minha experiência com a Lev&Fit foi excelente! Produtos de ótima qualidade e um atendimento nota 10, sempre com muita atenção e cordialidade. Dá gosto encontrar uma empresa que realmente se preocupa com seus clientes. Estão de parabéns pelo trabalho! Recomendo de olhos fechados! 👏🏼', 5, 'https://lh3.googleusercontent.com/a-/ALV-UjUkGk9ympHvKegFndxB-lTkr41XgPtrjBCED3nPVDbOAcASVwE=w96-h96-p-rp-mo-br100'),
+  ('g-10', 'Julia Eulalia', 'Sou cliente da Lev&Fit desde o comecinho, então tenho propriedade pra dizer o quanto as marmitas são gostosas! Além de deliciosas, trouxeram muito mais praticidade pra minha rotina. Não troco por nada e sigo com eles sempre! ❤️', 5, 'https://lh3.googleusercontent.com/a-/ALV-UjW1qPI14dVuPZHKFpGEiZ5iqvO9kxXGTEnSBbMMvvOKVj5jTLrbQg=w96-h96-p-rp-mo-br100'),
+  ('g-17', 'Guilherme Perottoni', 'Marmita bem servida e bem temperada, a melhor marmita congelada de Floripa.', 5, 'https://lh3.googleusercontent.com/a-/ALV-UjVkMqetF_J5aobGNMNLeiXlyzCVIrhnMM_7Qsq0lyG40j_6S916oQ=w96-h96-p-rp-mo-br100'),
+  ('g-23', 'marianna', 'Eu amei a experiência com a Lev&Fit, sempre me salva nos dias corridos e o sabor é surreal, não parece comida congelada', 5, 'https://lh3.googleusercontent.com/a/ACg8ocLWhxUjnfMoe8BDQudY0hpsc2MneOZiLPmwhVGpS0v-1IhB-w=w96-h96-p-rp-mo-br100'),
+  ('g-27', 'Klara Werner', 'Todos os meses faço pedido, e sempre sou surpreendida.
+
+A facilidade abrir o freezer, escolher um prato e comer um alimento fresco e saudável, não tem preço.
+
+As vezes o pessoal aqui de casa me pede uma marmita e outra, e quem prova se apaixona.
+
+Sou fã das marmitas oferecidas pela casa, bem como já solicitei marmitas de forma personalizada e a qualidade, sabor e aparência são sempre de primeira.
+
+Recomendo de olhas fechados!', 5, 'https://lh3.googleusercontent.com/a-/ALV-UjUGpNbM9Wm2HsMVGO2x0SJy8bxQ5e2YhwehajX729qK9rxbYutMRQ=w96-h96-p-rp-mo-br100')
 on conflict (id) do nothing;
 
 insert into public.promotions (id, title, description, image_url, is_active, is_launch, cta_label) values
-  ('lancamento-sucos', 'Chegaram os Sucos Lev & Fit!', 'Sucos naturais, feitos pra acompanhar suas marmitas. Peça junto no seu pedido!', 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?q=80&w=1080&auto=format&fit=crop', true, true, 'Quero provar'),
-  ('1', 'Combo 10 Marmitas', '10 marmitas ou caldos (pode misturar) por R$ 200 — sai R$ 20,00 cada!', '/produtos/combo-10.jpg', true, false, null),
-  ('2', 'Combo 15 Marmitas', '15 marmitas ou caldos (pode misturar) por R$ 285 — sai R$ 19,00 cada!', '/produtos/combo-15.jpg', true, false, null),
-  ('3', 'Oferta Coxinha e Kibe', 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!', '/produtos/coxinha.jpg', true, false, null)
+  ('lancamento-sucos', 'Chegaram os Sucos Lev & Fit!', 'Sucos naturais, feitos pra acompanhar suas marmitas. Peça junto no seu pedido!', 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?q=80&w=1080&auto=format&fit=crop', false, true, 'Quero provar'),
+  ('1', 'Combo 10 Marmitas', '10 marmitas ou caldos (pode misturar) por R$ 200 — sai R$ 20,00 cada!', '/produtos/combo-10.jpg?v=2', true, false, null),
+  ('2', 'Combo 15 Marmitas', '15 marmitas ou caldos (pode misturar) por R$ 285 — sai R$ 19,00 cada!', '/produtos/combo-15.jpg?v=2', true, false, null),
+  ('3', 'Oferta Coxinha e Kibe', 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!', '/produtos/salgados.jpg', true, false, null)
 on conflict (id) do nothing;

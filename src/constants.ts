@@ -1,4 +1,4 @@
-import { Category, Product, Testimonial, Promotion, BusinessProfile } from './types';
+import { Category, Product, Testimonial, Promotion, BusinessProfile, GoogleReviews } from './types';
 import { Utensils, Beef, Beer, IceCream, Coffee, Pizza, Sandwich, Wine, Soup, Apple, Cake, Martini, Fish, Salad, Leaf, Clock, Package, Drumstick, Droplets, CookingPot, ChefHat } from 'lucide-react';
 
 import { PRODUCT_IMAGES } from './productImages';
@@ -591,24 +591,70 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
 ];
 
+// Avaliações reais do Google (a lista completa fica no banco; aqui só um começo)
 export const INITIAL_TESTIMONIALS: Testimonial[] = [
   {
-    id: '1',
-    name: 'Mariana Silva',
-    comment: 'As marmitas são deliciosas e super práticas para o meu dia a dia corrido!',
+    id: 'g-02',
+    name: "Greice Balbinot",
+    comment: "Refeições com um sabor incrível e preparo impecável. E ainda tem a praticidade de ter refeições prontas à mão sempre que precisar! Adorei! 😍👏🏻👏🏻👏🏻",
     rating: 5,
-    avatar: 'https://i.pravatar.cc/150?u=mariana',
-    createdAt: new Date().toISOString(),
+    avatar: "https://lh3.googleusercontent.com/a/ACg8ocJNRsFhsM45PzVKSvxPI3DI19VdGd4cj77PebmmZjXSP52F0A=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-23T12:00:00-03:00',
+    source: 'google',
   },
   {
-    id: '2',
-    name: 'João Pedro',
-    comment: 'Melhor custo-benefício que já encontrei. O desconto progressivo ajuda muito!',
+    id: 'g-03',
+    name: "Jefferson da Silva Bitencourt",
+    comment: "Minha experiência com a Lev&Fit foi excelente! Produtos de ótima qualidade e um atendimento nota 10, sempre com muita atenção e cordialidade. Dá gosto encontrar uma empresa que realmente se preocupa com seus clientes. Estão de parabéns pelo trabalho! Recomendo de olhos fechados! 👏🏼",
     rating: 5,
-    avatar: 'https://i.pravatar.cc/150?u=joao',
-    createdAt: new Date().toISOString(),
+    avatar: "https://lh3.googleusercontent.com/a-/ALV-UjUkGk9ympHvKegFndxB-lTkr41XgPtrjBCED3nPVDbOAcASVwE=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-23T12:00:00-03:00',
+    source: 'google',
+  },
+  {
+    id: 'g-10',
+    name: "Julia Eulalia",
+    comment: "Sou cliente da Lev&Fit desde o comecinho, então tenho propriedade pra dizer o quanto as marmitas são gostosas! Além de deliciosas, trouxeram muito mais praticidade pra minha rotina. Não troco por nada e sigo com eles sempre! ❤️",
+    rating: 5,
+    avatar: "https://lh3.googleusercontent.com/a-/ALV-UjW1qPI14dVuPZHKFpGEiZ5iqvO9kxXGTEnSBbMMvvOKVj5jTLrbQg=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-23T12:00:00-03:00',
+    source: 'google',
+  },
+  {
+    id: 'g-17',
+    name: "Guilherme Perottoni",
+    comment: "Marmita bem servida e bem temperada, a melhor marmita congelada de Floripa.",
+    rating: 5,
+    avatar: "https://lh3.googleusercontent.com/a-/ALV-UjVkMqetF_J5aobGNMNLeiXlyzCVIrhnMM_7Qsq0lyG40j_6S916oQ=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-17T12:00:00-03:00',
+    source: 'google',
+  },
+  {
+    id: 'g-23',
+    name: "marianna",
+    comment: "Eu amei a experiência com a Lev&Fit, sempre me salva nos dias corridos e o sabor é surreal, não parece comida congelada",
+    rating: 5,
+    avatar: "https://lh3.googleusercontent.com/a/ACg8ocLWhxUjnfMoe8BDQudY0hpsc2MneOZiLPmwhVGpS0v-1IhB-w=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-17T12:00:00-03:00',
+    source: 'google',
+  },
+  {
+    id: 'g-27',
+    name: "Klara Werner",
+    comment: "Todos os meses faço pedido, e sempre sou surpreendida.\n\nA facilidade abrir o freezer, escolher um prato e comer um alimento fresco e saudável, não tem preço.\n\nAs vezes o pessoal aqui de casa me pede uma marmita e outra, e quem prova se apaixona.\n\nSou fã das marmitas oferecidas pela casa, bem como já solicitei marmitas de forma personalizada e a qualidade, sabor e aparência são sempre de primeira.\n\nRecomendo de olhas fechados!",
+    rating: 5,
+    avatar: "https://lh3.googleusercontent.com/a-/ALV-UjUGpNbM9Wm2HsMVGO2x0SJy8bxQ5e2YhwehajX729qK9rxbYutMRQ=w96-h96-p-rp-mo-br100",
+    createdAt: '2026-10-17T12:00:00-03:00',
+    source: 'google',
   },
 ];
+
+export const GOOGLE_DEFAULT: GoogleReviews = {
+  rating: 5,
+  total: 31,
+  reviewUrl: 'https://g.page/r/CfS1dySmIPbgEBM/review',
+  mapsUrl: 'https://maps.google.com/?cid=16210179806715164148',
+};
 
 export const INITIAL_PROMOTIONS: Promotion[] = [
   {
@@ -616,7 +662,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
     title: 'Chegaram os Sucos Lev & Fit!',
     description: 'Sucos naturais, feitos pra acompanhar suas marmitas. Peça junto no seu pedido!',
     image: 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?q=80&w=1080&auto=format&fit=crop',
-    active: true,
+    active: false,
     isLaunch: true,
     ctaLabel: 'Quero provar',
     createdAt: new Date().toISOString(),
@@ -625,7 +671,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
     id: '1',
     title: 'Combo 10 Marmitas',
     description: '10 marmitas ou caldos (pode misturar) por R$ 200 — sai R$ 20,00 cada!',
-    image: '/produtos/combo-10.jpg',
+    image: '/produtos/combo-10.jpg?v=2',
     active: true,
     createdAt: new Date().toISOString(),
   },
@@ -633,7 +679,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
     id: '2',
     title: 'Combo 15 Marmitas',
     description: '15 marmitas ou caldos (pode misturar) por R$ 285 — sai R$ 19,00 cada!',
-    image: '/produtos/combo-15.jpg',
+    image: '/produtos/combo-15.jpg?v=2',
     active: true,
     createdAt: new Date().toISOString(),
   },
@@ -641,7 +687,7 @@ export const INITIAL_PROMOTIONS: Promotion[] = [
     id: '3',
     title: 'Oferta Coxinha e Kibe',
     description: 'Leve 3 salgados (coxinha fit ou kibe, pode misturar) por R$ 24,00!',
-    image: '/produtos/coxinha.jpg',
+    image: '/produtos/salgados.jpg',
     active: true,
     createdAt: new Date().toISOString(),
   },
@@ -658,6 +704,7 @@ export const INITIAL_PROFILE: BusinessProfile = {
     following: 213,
   },
   isOpen: true,
+  google: GOOGLE_DEFAULT,
 };
 
 export const BUSINESS_CONFIG = {

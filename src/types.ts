@@ -56,6 +56,18 @@ export interface Testimonial {
   comment: string;
   avatar: string;
   createdAt: string;
+  /** 'google' = avaliação copiada do Google Maps */
+  source?: 'google';
+}
+
+/** Nota da loja no Google (mostrada na seção de avaliações) */
+export interface GoogleReviews {
+  rating: number;
+  total: number;
+  /** link que abre direto a tela de avaliar */
+  reviewUrl: string;
+  /** link da página da loja no Google Maps */
+  mapsUrl: string;
 }
 
 export interface Promotion {
@@ -69,6 +81,11 @@ export interface Promotion {
   /** Texto do botão do story (ex.: "Quero provar") */
   ctaLabel?: string;
   createdAt: string;
+  /** 'instagram' = story puxado do Instagram da loja (não é oferta do site) */
+  source?: 'instagram';
+  mediaType?: 'IMAGE' | 'VIDEO';
+  /** link do story no Instagram */
+  permalink?: string;
 }
 
 export interface DeliverySettings {
@@ -82,8 +99,6 @@ export interface DeliverySettings {
   includedKm: number;
   /** Distância máxima atendida (0 = sem limite) */
   maxKm: number;
-  /** Entrega grátis a partir deste valor de pedido (0 = nunca) */
-  freeAbove: number;
   /** Ponto de saída das entregas */
   originLabel?: string;
   originLat?: number;
@@ -106,6 +121,7 @@ export interface BusinessProfile {
   };
   profilePicture?: string;
   isOpen: boolean;
+  google?: GoogleReviews;
 }
 
 export interface MenuData {

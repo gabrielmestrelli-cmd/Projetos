@@ -24,6 +24,7 @@ const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL as string | undefined) || 
 import { whatsappLink, maskPhone } from '../lib/phone';
 import { formatBRL } from '../lib/pricing';
 import { DEFAULT_DELIVERY, feeFor, geocode, formatKm } from '../lib/delivery';
+import { GOOGLE_DEFAULT } from '../constants';
 import { DeliverySettings } from '../types';
 import { supabase } from '../lib/supabase';
 
@@ -40,6 +41,8 @@ interface AdminPanelProps {
   authChecked: boolean;
   onAdminLogin: (email: string, password: string) => Promise<string | null>;
   onAdminLogout: () => void;
+  /** recarrega tudo do banco (cardápio, perfil, stories e pedidos) */
+  onRefreshAll?: () => Promise<void>;
 }
 
 export default function AdminPanel({ 
@@ -54,7 +57,8 @@ export default function AdminPanel({
   isAdmin,
   authChecked,
   onAdminLogin,
-  onAdminLogout
+  onAdminLogout,
+  onRefreshAll,
 }: AdminPanelProps) {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -154,6 +158,75 @@ export default function AdminPanel({
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+
+  // ---- Salvamento automático do perfil + botão "Atualizar tudo" ----
+  const [saveState, setSaveState] = useState<'saved' | 'pending' | 'saving' | 'error'>('saved');
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [igStatus, setIgStatus] = useState<{ conectado: boolean; usuario?: string | null; ultima_vez?: string | null; erro?: string | null } | null>(null);
+  const [igToken, setIgToken] = useState('');
+  const profileJson = JSON.stringify(profileForm);
+  const profileDirty = profileJson !== JSON.stringify(profile);
+
+  const saveProfileNow = async (silent = true) => {
+    setSaveState('saving');
+    const ok = await onUpdateMenu(categories, products, testimonials, promotions, profileForm);
+    setSaveState(ok ? 'saved' : 'error');
+    if (ok) setLastSync(new Date());
+    if (ok && !silent) toast.success('Perfil salvo');
+    return ok;
+  };
+
+  // Mexeu no perfil: salva sozinho 1,5 s depois de parar de digitar
+  useEffect(() => {
+    if (!isAdmin || !profileDirty) return;
+    setSaveState('pending');
+    const t = setTimeout(() => { saveProfileNow(); }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, profileDirty, profileJson]);
+
+  // Avisa antes de fechar a aba com alteração ainda não salva
+  useEffect(() => {
+    if (saveState === 'saved') return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saveState]);
+
+  const loadIgStatus = async () => {
+    const { data } = await supabase.rpc('status_instagram');
+    if (data) setIgStatus(data);
+  };
+  useEffect(() => { if (isAdmin) loadIgStatus(); }, [isAdmin]);
+
+  const refreshEverything = async () => {
+    setRefreshing(true);
+    try {
+      if (profileDirty) await saveProfileNow();
+      const ig = await supabase.functions.invoke('instagram-sync', { body: {} }).catch(() => null);
+      await onRefreshAll?.();
+      await loadIgStatus();
+      setLastSync(new Date());
+      const d = ig?.data as { ok?: boolean; skipped?: boolean; configured?: boolean; message?: string; followers?: number; stories?: number } | null | undefined;
+      if (d?.ok && !d.skipped) toast.success('Site atualizado', { description: `Instagram: ${d.followers ?? '?'} seguidores e ${d.stories ?? 0} stories no ar.` });
+      else if (d?.ok && d.skipped) toast.success('Site atualizado', { description: 'O Instagram já tinha sido atualizado agora há pouco.' });
+      else if (d && d.configured === false) toast.success('Site atualizado', { description: 'Conecte o Instagram na aba Perfil para puxar stories e seguidores.' });
+      else if (d && d.ok === false) toast.warning('Site atualizado, mas o Instagram deu erro', { description: d.message });
+      else toast.success('Site atualizado');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const connectInstagram = async () => {
+    if (!igToken.trim()) { toast.error('Cole o token do Instagram'); return; }
+    const { error } = await supabase.rpc('salvar_token_instagram', { token: igToken.trim() });
+    if (error) { toast.error('Não consegui salvar o token', { description: error.message }); return; }
+    setIgToken('');
+    toast.success('Token salvo. Buscando os dados do Instagram…');
+    await refreshEverything();
+  };
 
   useEffect(() => {
     const newOrder = orders[0];
@@ -393,10 +466,7 @@ export default function AdminPanel({
     if (ok) toast.success(active ? 'Story publicado' : 'Story escondido');
   };
 
-  const handleSaveProfile = async () => {
-    const ok = await onUpdateMenu(categories, products, testimonials, promotions, profileForm);
-    if (ok) toast.success('Perfil salvo');
-  };
+  const handleSaveProfile = () => saveProfileNow(false);
 
   const delivery: DeliverySettings = profileForm.delivery ?? { ...DEFAULT_DELIVERY, baseFee: profileForm.deliveryFee || 0 };
   const setDelivery = (patch: Partial<DeliverySettings>) =>
@@ -413,6 +483,7 @@ export default function AdminPanel({
     setLocating(false);
     if (!point) { toast.error('Não achei esse endereço no mapa', { description: 'Tente "Rua, número, bairro, cidade".' }); return; }
     setDelivery({ originLabel: label, originLat: point.lat, originLng: point.lng });
+    if (point.precision !== 'exato') toast.warning('Achei só a rua, não o número exato', { description: 'Abra "Ver no mapa" e confira se o ponto está certo.' });
     toast.success('Ponto de saída encontrado. Confira no mapa e salve.');
   };
 
@@ -454,9 +525,21 @@ export default function AdminPanel({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Painel Administrativo</h2>
-          <p className="text-slate-500">Gerencie seu cardápio, pedidos e configurações.</p>
+          <p className="text-slate-500">Gerencie seu cardápio, pedidos e configurações. Tudo o que você muda aqui é salvo sozinho.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            role="status"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              saveState === 'error' ? 'bg-red-50 text-red-700' : saveState === 'saved' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            {saveState === 'saving' || saveState === 'pending' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saveState === 'error' ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {saveState === 'saving' ? 'Salvando…' : saveState === 'pending' ? 'Salvando em instantes…' : saveState === 'error' ? 'Não salvou. Toque em Atualizar tudo' : `Tudo salvo${lastSync ? ` • ${lastSync.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+          </span>
+          <Button onClick={refreshEverything} disabled={refreshing} className="bg-green-600 hover:bg-green-700">
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Atualizando…' : 'Atualizar tudo'}
+          </Button>
           <Button variant="outline" onClick={() => playCashRegister()}>
             <Volume2 className="mr-2 h-4 w-4" /> Testar som 💰
           </Button>
@@ -610,6 +693,52 @@ export default function AdminPanel({
                   </div>
                 </div>
               </div>
+              <div className="space-y-3 rounded-2xl border p-4">
+                <div>
+                  <h4 className="font-semibold">Avaliações do Google</h4>
+                  <p className="text-sm text-slate-500">Aparece no site com o botão "Avaliar no Google". As avaliações aparecem no site a partir da aba Feedback.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="g-rating" className="text-xs">Nota no Google</Label>
+                    <Input id="g-rating" type="number" inputMode="decimal" step="0.1" min="1" max="5" value={profileForm.google?.rating ?? 5} onChange={e => setProfileForm(f => ({ ...f, google: { ...GOOGLE_DEFAULT, ...f.google, rating: Math.min(5, Math.max(0, parseFloat(e.target.value) || 0)) } }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="g-total" className="text-xs">Nº de avaliações</Label>
+                    <Input id="g-total" type="number" inputMode="numeric" min="0" value={profileForm.google?.total ?? 0} onChange={e => setProfileForm(f => ({ ...f, google: { ...GOOGLE_DEFAULT, ...f.google, total: Math.max(0, parseInt(e.target.value) || 0) } }))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="g-review" className="text-xs">Link para avaliar</Label>
+                  <Input id="g-review" value={profileForm.google?.reviewUrl ?? ''} onChange={e => setProfileForm(f => ({ ...f, google: { ...GOOGLE_DEFAULT, ...f.google, reviewUrl: e.target.value.trim() } }))} />
+                </div>
+              </div>
+              <div className="space-y-3 rounded-2xl border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="font-semibold">Instagram no site</h4>
+                    <p className="text-sm text-slate-500">Quando conectado, os stories que vocês postarem aparecem na foto do perfil do site, e os números de seguidores e publicações se atualizam sozinhos a cada 15 minutos.</p>
+                  </div>
+                  <Badge variant="outline" className={igStatus?.conectado && !igStatus?.erro ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}>
+                    {igStatus?.conectado ? (igStatus.erro ? 'Com erro' : 'Conectado') : 'Não conectado'}
+                  </Badge>
+                </div>
+                {igStatus?.conectado && (
+                  <p className="text-xs text-slate-500">
+                    {igStatus.usuario ? `@${igStatus.usuario} • ` : ''}
+                    {igStatus.ultima_vez ? `última atualização ${new Date(igStatus.ultima_vez).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : 'ainda não atualizou'}
+                    {igStatus.erro && <span className="block text-red-600">Erro do Instagram: {igStatus.erro}</span>}
+                  </p>
+                )}
+                <div className="space-y-1">
+                  <Label htmlFor="ig-token" className="text-xs">{igStatus?.conectado ? 'Trocar o token' : 'Token de acesso do Instagram'}</Label>
+                  <div className="flex gap-2">
+                    <Input id="ig-token" type="password" autoComplete="off" placeholder="Cole aqui o token (começa com IG…)" value={igToken} onChange={e => setIgToken(e.target.value)} />
+                    <Button type="button" variant="outline" onClick={connectInstagram} disabled={!igToken.trim() || refreshing}>Conectar</Button>
+                  </div>
+                  <p className="text-xs text-slate-400">O token fica guardado só no servidor; ninguém vê pelo site. Ele se renova sozinho.</p>
+                </div>
+              </div>
               <div className="space-y-4 rounded-2xl border p-4">
                 <div>
                   <h4 className="font-semibold">Entrega</h4>
@@ -644,12 +773,8 @@ export default function AdminPanel({
                       </div>
                     </>
                   )}
-                  <div className="space-y-1">
-                    <Label htmlFor="dl-free" className="text-xs">Grátis acima de (R$)</Label>
-                    <Input id="dl-free" type="number" inputMode="decimal" step="10" min="0" value={delivery.freeAbove} onChange={e => setDelivery({ freeAbove: Math.max(0, parseFloat(e.target.value) || 0) })} />
-                  </div>
                 </div>
-                <p className="text-xs text-slate-400">Deixe 0 em "Grátis acima de" ou "Atende até" para não usar. Na taxa fixa, 0 vira "a combinar".</p>
+                <p className="text-xs text-slate-400">Não existe frete grátis: cada cliente paga pela distância até a casa dele. Deixe 0 em "Atende até" para não ter limite. Na taxa fixa, 0 vira "a combinar".</p>
 
                 {delivery.mode === 'per_km' && (
                   <>
@@ -675,7 +800,7 @@ export default function AdminPanel({
                       <p className="mb-2 text-xs font-semibold text-slate-500">Como fica a taxa</p>
                       <div className="grid grid-cols-4 gap-2 text-center text-sm">
                         {[2, 5, 10, 15].map(km => {
-                          const r = feeFor({ ...delivery, freeAbove: 0 }, km, 0);
+                          const r = feeFor(delivery, km);
                           return (
                             <div key={km} className="rounded-lg bg-white p-2">
                               <div className="text-xs text-slate-400">{formatKm(km)}</div>
@@ -691,7 +816,7 @@ export default function AdminPanel({
             </CardContent>
             <CardFooter className="bg-slate-50/50 border-t py-4 flex justify-end">
               <Button onClick={handleSaveProfile} className="bg-green-600 hover:bg-green-700">
-                Salvar Alterações do Perfil
+                Salvar agora
               </Button>
             </CardFooter>
           </Card>

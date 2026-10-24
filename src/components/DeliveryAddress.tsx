@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, CheckCircle2, LocateFixed } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { DeliverySettings } from '../types';
-import { lookupCep, geocode, drivingKm, feeFor, maskCep, onlyDigits, formatKm, LatLng } from '../lib/delivery';
+import { lookupCep, geocode, reverseGeocode, drivingKm, feeFor, maskCep, onlyDigits, formatKm, mapLink, LatLng, Precision } from '../lib/delivery';
 import { formatBRL } from '../lib/pricing';
 
 export interface AddressFields {
@@ -14,6 +15,9 @@ export interface AddressFields {
   neighborhood: string;
   city: string;
   state: string;
+  /** Ponto exato vindo do GPS do celular ("usar minha localização"). Some se o cliente mudar o endereço. */
+  lat?: number;
+  lng?: number;
 }
 
 export const EMPTY_ADDRESS: AddressFields = { cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '' };
@@ -34,7 +38,11 @@ export type QuoteStatus = 'idle' | 'loading' | 'ok' | 'not_found' | 'no_origin';
 export interface Quote {
   status: QuoteStatus;
   km: number | null;
+  /** distância pela linha reta (o serviço de rotas falhou) */
   estimated?: boolean;
+  /** onde o endereço caiu no mapa, para o cliente conferir */
+  point?: LatLng;
+  precision?: Precision;
 }
 
 const STORAGE_KEY = 'customer_address_v2';
@@ -62,30 +70,37 @@ export function useDeliveryQuote(settings: DeliverySettings, address: AddressFie
   const origin: LatLng | null =
     settings.originLat != null && settings.originLng != null ? { lat: settings.originLat, lng: settings.originLng } : null;
 
-  const key = `${onlyDigits(address.cep)}|${address.number.trim()}|${address.street.trim()}|${settings.mode}|${origin?.lat}|${origin?.lng}`;
+  const gps: LatLng | null = address.lat != null && address.lng != null ? { lat: address.lat, lng: address.lng } : null;
+  const key = `${onlyDigits(address.cep)}|${address.number.trim()}|${address.street.trim()}|${address.city.trim()}|${gps?.lat}|${gps?.lng}|${settings.mode}|${origin?.lat}|${origin?.lng}`;
 
   useEffect(() => {
     if (settings.mode !== 'per_km') { setQuote({ status: 'idle', km: null }); return; }
     if (!origin) { setQuote({ status: 'no_origin', km: null }); return; }
-    if (onlyDigits(address.cep).length !== 8 || !address.number.trim()) { setQuote({ status: 'idle', km: null }); return; }
+    const hasAddress = onlyDigits(address.cep).length === 8 && !!address.number.trim();
+    if (!gps && !hasAddress) { setQuote({ status: 'idle', km: null }); return; }
 
     const my = ++seq.current;
     setQuote({ status: 'loading', km: null });
     const t = setTimeout(async () => {
-      const cepInfo = await lookupCep(address.cep).catch(() => null);
-      const point =
-        (await geocode({
+      let point: LatLng | null = gps;
+      let precision: Precision = 'gps';
+      if (!point) {
+        const cepInfo = await lookupCep(address.cep).catch(() => null);
+        const found = await geocode({
           street: address.street || cepInfo?.street,
           number: address.number,
           neighborhood: address.neighborhood || cepInfo?.neighborhood,
           city: address.city || cepInfo?.city,
           state: address.state || cepInfo?.state,
-        }).catch(() => null)) || cepInfo?.coords || null;
+        }).catch(() => null);
+        if (found) { point = found; precision = found.precision; }
+        else if (cepInfo?.coords) { point = cepInfo.coords; precision = 'aproximado'; }
+      }
       if (my !== seq.current) return;
       if (!point) { setQuote({ status: 'not_found', km: null }); return; }
       const { km, estimated } = await drivingKm(origin, point);
       if (my !== seq.current) return;
-      setQuote({ status: 'ok', km, estimated });
+      setQuote({ status: 'ok', km, estimated, point, precision });
     }, 700);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +116,46 @@ export function AddressForm({ value, onChange, idPrefix = 'addr' }: { value: Add
   const numberRef = useRef<HTMLInputElement>(null);
   const lastCep = useRef(onlyDigits(value.cep));
 
-  const set = (patch: Partial<AddressFields>) => onChange({ ...value, ...patch });
+  const [locating, setLocating] = useState(false);
+  const [gpsError, setGpsError] = useState('');
+  // Mudou rua, número, CEP ou cidade na mão: o ponto do GPS deixa de valer
+  const set = (patch: Partial<AddressFields>) => {
+    const movesPoint = ['cep', 'street', 'number', 'city'].some(k => k in patch);
+    onChange({ ...value, ...patch, ...(movesPoint ? { lat: undefined, lng: undefined } : {}) });
+  };
+
+  const useMyLocation = () => {
+    setGpsError('');
+    if (!('geolocation' in navigator)) { setGpsError('Seu navegador não deixa pegar a localização. Preencha o endereço.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const found = await reverseGeocode(point);
+        setLocating(false);
+        lastCep.current = onlyDigits(found?.cep || '');
+        onChange({
+          ...value,
+          cep: found?.cep || value.cep,
+          street: found?.street || value.street,
+          number: found?.number || value.number,
+          neighborhood: found?.neighborhood || value.neighborhood,
+          city: found?.city || value.city,
+          state: found?.state || value.state,
+          lat: point.lat,
+          lng: point.lng,
+        });
+        if (!found?.number) setTimeout(() => numberRef.current?.focus(), 50);
+      },
+      err => {
+        setLocating(false);
+        setGpsError(err.code === err.PERMISSION_DENIED
+          ? 'Você não liberou a localização. Pode preencher o endereço abaixo.'
+          : 'Não consegui pegar sua localização agora. Preencha o endereço abaixo.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
 
   const onCep = async (raw: string) => {
     const masked = maskCep(raw);
@@ -116,6 +170,8 @@ export function AddressForm({ value, onChange, idPrefix = 'addr' }: { value: Add
     if (!info) { setCepError('CEP não encontrado. Preencha o endereço abaixo.'); return; }
     onChange({
       ...value,
+      lat: undefined,
+      lng: undefined,
       cep: masked,
       street: info.street || value.street,
       neighborhood: info.neighborhood || value.neighborhood,
@@ -130,6 +186,12 @@ export function AddressForm({ value, onChange, idPrefix = 'addr' }: { value: Add
 
   return (
     <div className="grid gap-3">
+      <Button type="button" variant="outline" className="h-11 rounded-xl border-green-200 bg-green-50 font-semibold text-green-800 hover:bg-green-100" onClick={useMyLocation} disabled={locating}>
+        {locating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LocateFixed className="mr-2 h-4 w-4" />}
+        {locating ? 'Pegando sua localização…' : value.lat != null ? 'Localização pega pelo GPS ✓ (tocar para atualizar)' : 'Usar minha localização (mais preciso)'}
+      </Button>
+      {gpsError && <p className="text-xs text-amber-700">{gpsError}</p>}
+      <p className="text-center text-xs text-slate-400">ou digite o endereço</p>
       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-cep`} className={label}>CEP</Label>
@@ -167,19 +229,26 @@ export function AddressForm({ value, onChange, idPrefix = 'addr' }: { value: Add
   );
 }
 
+const PRECISION_TEXT: Record<Precision, string> = {
+  gps: 'pela sua localização',
+  exato: 'pelo número da casa',
+  rua: 'pela rua (sem o número exato)',
+  aproximado: 'pelo CEP/bairro (aproximado)',
+};
+
 /** Caixa com a distância e o valor da entrega. */
-export function QuoteBox({ settings, quote, orderValue }: { settings: DeliverySettings; quote: Quote; orderValue: number }) {
+export function QuoteBox({ settings, quote }: { settings: DeliverySettings; quote: Quote; orderValue?: number }) {
   if (settings.mode === 'fixed') {
-    const r = feeFor(settings, null, orderValue);
+    const r = feeFor(settings, null);
     return (
       <div className="flex items-center gap-2 rounded-xl bg-green-50 p-3 text-sm text-green-800">
         <MapPin className="h-4 w-4 shrink-0" />
-        {r.free ? 'Entrega grátis' : r.fee > 0 ? <>Taxa de entrega: <strong>{formatBRL(r.fee)}</strong></> : 'Taxa de entrega a combinar pelo WhatsApp'}
+        {r.fee > 0 ? <>Taxa de entrega: <strong>{formatBRL(r.fee)}</strong></> : 'Taxa de entrega a combinar pelo WhatsApp'}
       </div>
     );
   }
   if (quote.status === 'idle') {
-    return <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Coloque o CEP e o número para calcular a entrega.</p>;
+    return <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Toque em "Usar minha localização" ou coloque o CEP e o número para calcular a entrega.</p>;
   }
   if (quote.status === 'loading') {
     return <p className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" /> Calculando a distância…</p>;
@@ -189,29 +258,35 @@ export function QuoteBox({ settings, quote, orderValue }: { settings: DeliverySe
       <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
         {quote.status === 'not_found'
-          ? 'Não achamos esse endereço no mapa. A taxa será combinada pelo WhatsApp.'
+          ? 'Não achamos esse endereço no mapa. Toque em "Usar minha localização" ou confira o CEP e o número. Se não der, a taxa é combinada pelo WhatsApp.'
           : 'Taxa de entrega a combinar pelo WhatsApp.'}
       </div>
     );
   }
-  const r = feeFor(settings, quote.km, orderValue);
+  const r = feeFor(settings, quote.km);
+  const exact = quote.precision === 'gps' || quote.precision === 'exato';
+  const mapa = quote.point ? (
+    <a href={mapLink(quote.point)} target="_blank" rel="noreferrer" className="font-semibold underline">Ver no mapa</a>
+  ) : null;
   if (r.outOfRange) {
     return (
       <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>Fica a {formatKm(quote.km)} da gente, fora da área de entrega (até {formatKm(settings.maxKm)}). Escolha retirar no local ou chame no WhatsApp.</span>
+        <span>Fica a {formatKm(quote.km)} da gente, fora da área de entrega (até {formatKm(settings.maxKm)}). Escolha retirar no local ou chame no WhatsApp. {mapa}</span>
       </div>
     );
   }
   return (
-    <div className="flex items-start gap-2 rounded-xl bg-green-50 p-3 text-sm text-green-800">
-      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>
-        {quote.estimated ? 'Cerca de ' : ''}{formatKm(quote.km)} até você •{' '}
-        {r.free ? <strong>Entrega grátis</strong> : <>entrega <strong>{formatBRL(r.fee)}</strong></>}
-        {settings.freeAbove > 0 && !r.free && (
-          <span className="block text-xs text-green-700">Grátis em pedidos a partir de {formatBRL(settings.freeAbove)}</span>
-        )}
+    <div className={`flex items-start gap-2 rounded-xl p-3 text-sm ${exact ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`}>
+      {exact ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+      <span className="space-y-1">
+        <span className="block">
+          {quote.estimated ? 'Cerca de ' : ''}{formatKm(quote.km)} até você • entrega <strong>{r.fee > 0 ? formatBRL(r.fee) : 'a combinar'}</strong>
+        </span>
+        <span className="block text-xs">
+          Calculado {quote.precision ? PRECISION_TEXT[quote.precision] : ''}. {mapa}
+          {!exact && ' Se o ponto não for a sua casa, toque em "Usar minha localização" para acertar o valor.'}
+        </span>
       </span>
     </div>
   );

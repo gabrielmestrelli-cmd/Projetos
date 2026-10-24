@@ -6,13 +6,13 @@ import { DeliverySettings } from '../types';
 //  - Nominatim (OpenStreetMap): coordenadas do endereço com número
 //  - OSRM: distância de carro pelas ruas
 
+// Sem frete grátis: cada cliente paga pela distância até a casa dele.
 export const DEFAULT_DELIVERY: DeliverySettings = {
-  mode: 'fixed',
+  mode: 'per_km',
   baseFee: 0,
   perKm: 1.5,
   includedKm: 3,
   maxKm: 25,
-  freeAbove: 0,
 };
 
 export interface LatLng { lat: number; lng: number }
@@ -71,9 +71,14 @@ export async function lookupCep(cepRaw: string): Promise<CepAddress | null> {
   };
 }
 
+/** Precisão do ponto achado no mapa: número da casa, só a rua, ou só o CEP/bairro. */
+export type Precision = 'gps' | 'exato' | 'rua' | 'aproximado';
+
+export interface GeoPoint extends LatLng { precision: Precision }
+
 /** Coordenadas de um endereço (rua + número + cidade). */
-export async function geocode(parts: { street?: string; number?: string; neighborhood?: string; city?: string; state?: string; free?: string }): Promise<LatLng | null> {
-  const base = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br';
+export async function geocode(parts: { street?: string; number?: string; neighborhood?: string; city?: string; state?: string; free?: string }): Promise<GeoPoint | null> {
+  const base = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&addressdetails=1';
   const tries: string[] = [];
   if (parts.street && parts.city) {
     const street = [parts.number, parts.street].filter(Boolean).join(' ');
@@ -85,11 +90,37 @@ export async function geocode(parts: { street?: string; number?: string; neighbo
   for (const url of tries) {
     try {
       const res = await withTimeout(url);
-      if (Array.isArray(res) && res[0]) return { lat: Number(res[0].lat), lng: Number(res[0].lon) };
+      const r = Array.isArray(res) ? res[0] : null;
+      if (!r) continue;
+      const exact = !!r.address?.house_number || r.addresstype === 'building' || r.type === 'house';
+      const onStreet = !!r.address?.road || r.class === 'highway';
+      return { lat: Number(r.lat), lng: Number(r.lon), precision: exact ? 'exato' : onStreet ? 'rua' : 'aproximado' };
     } catch { /* tenta o próximo */ }
   }
   return null;
 }
+
+/** Endereço a partir das coordenadas (para o botão "usar minha localização"). */
+export async function reverseGeocode(point: LatLng): Promise<{ cep: string; street: string; number: string; neighborhood: string; city: string; state: string } | null> {
+  try {
+    const r = await withTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${point.lat}&lon=${point.lng}`);
+    const a = r?.address;
+    if (!a) return null;
+    return {
+      cep: maskCep(a.postcode || ''),
+      street: a.road || a.pedestrian || a.footway || '',
+      number: a.house_number || '',
+      neighborhood: a.suburb || a.neighbourhood || a.quarter || a.city_district || '',
+      city: a.city || a.town || a.village || a.municipality || '',
+      state: (a['ISO3166-2-lvl4'] || '').replace('BR-', '') || a.state || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Link para conferir um ponto no mapa. */
+export const mapLink = (p: LatLng) => `https://www.google.com/maps?q=${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
 
 /** Distância em linha reta (km). */
 export function straightKm(a: LatLng, b: LatLng) {
@@ -116,22 +147,17 @@ export interface FeeResult {
   fee: number;
   /** fora do raio de entrega */
   outOfRange: boolean;
-  free: boolean;
 }
 
 const roundTo50 = (n: number) => Math.ceil(n * 2) / 2;
 
-/** Taxa de entrega para uma distância e um valor de pedido. */
-export function feeFor(settings: DeliverySettings, km: number | null, orderValue: number): FeeResult {
-  if (settings.freeAbove > 0 && orderValue >= settings.freeAbove) {
-    const out = settings.mode === 'per_km' && km !== null && settings.maxKm > 0 && km > settings.maxKm;
-    return { fee: 0, outOfRange: out, free: !out };
-  }
-  if (settings.mode === 'fixed') return { fee: settings.baseFee, outOfRange: false, free: settings.baseFee === 0 };
-  if (km === null) return { fee: settings.baseFee, outOfRange: false, free: false };
-  if (settings.maxKm > 0 && km > settings.maxKm) return { fee: 0, outOfRange: true, free: false };
+/** Taxa de entrega para uma distância. Não existe frete grátis: taxa fixa 0 = "a combinar". */
+export function feeFor(settings: DeliverySettings, km: number | null): FeeResult {
+  if (settings.mode === 'fixed') return { fee: settings.baseFee, outOfRange: false };
+  if (km === null) return { fee: 0, outOfRange: false };
+  if (settings.maxKm > 0 && km > settings.maxKm) return { fee: 0, outOfRange: true };
   const extra = Math.max(0, km - settings.includedKm) * settings.perKm;
-  return { fee: roundTo50(settings.baseFee + extra), outOfRange: false, free: false };
+  return { fee: roundTo50(settings.baseFee + extra), outOfRange: false };
 }
 
 export const formatKm = (km: number) =>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, Instagram } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Promotion } from '../types';
 
@@ -58,6 +58,8 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
 }) {
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
+  // Story em vídeo dura o tempo do vídeo; foto e oferta, 5 s
+  const duration = useRef(STORY_MS);
   const paused = useRef(false);
   const last = useRef<number | null>(null);
   const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -72,6 +74,8 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
   }, [stories.length, onClose]);
   const prev = () => { setProgress(0); setIndex(i => Math.max(0, i - 1)); };
 
+  useEffect(() => { duration.current = STORY_MS; }, [index]);
+
   useEffect(() => {
     if (!story) return;
     markSeen(story.id);
@@ -84,7 +88,7 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
     const tick = (t: number) => {
       if (last.current !== null && !paused.current) {
         setProgress(p => {
-          const np = p + (t - (last.current as number)) / (reduce ? STORY_MS * 1.6 : STORY_MS);
+          const np = p + (t - (last.current as number)) / (reduce ? duration.current * 1.6 : duration.current);
           if (np >= 1) { setTimeout(next, 0); return 1; }
           return np;
         });
@@ -130,8 +134,20 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black" role="dialog" aria-modal="true" aria-label={story.title}>
       <div className="relative h-full w-full max-w-md select-none overflow-hidden bg-black sm:h-[92vh] sm:rounded-3xl">
-        <img src={story.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" draggable={false} />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80" />
+        {story.mediaType === 'VIDEO' ? (
+          <video
+            key={story.id}
+            src={story.image}
+            className="absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            onLoadedMetadata={e => { const d = (e.currentTarget as HTMLVideoElement).duration; if (Number.isFinite(d) && d > 0) duration.current = Math.min(d, 60) * 1000; }}
+          />
+        ) : (
+          <img src={story.image} alt="" className={`absolute inset-0 h-full w-full ${story.source === 'instagram' ? 'object-contain' : 'object-cover'}`} referrerPolicy="no-referrer" draggable={false} />
+        )}
+        <div className={`absolute inset-0 bg-gradient-to-b from-black/50 via-transparent ${story.source === 'instagram' ? 'to-black/40' : 'to-black/80'}`} />
 
         {/* barrinhas */}
         <div className="absolute inset-x-3 top-3 z-20 flex gap-1" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
@@ -153,6 +169,18 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
         {/* área de toque */}
         <div className="absolute inset-0 z-10" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { paused.current = false; }} />
 
+        {story.source === 'instagram' ? (
+          <div className="absolute inset-x-0 bottom-0 z-20 p-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
+            <a
+              href={story.permalink || 'https://instagram.com/levfitcongelados'}
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/90 py-3 text-sm font-bold text-slate-900"
+            >
+              <Instagram className="h-4 w-4" /> Ver no Instagram
+            </a>
+          </div>
+        ) : (
         <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 p-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
           {story.isLaunch ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-lime-400 px-3 py-1 text-xs font-black uppercase tracking-wide text-green-950">
@@ -170,6 +198,7 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
             {story.ctaLabel || (story.isLaunch ? 'Quero provar' : 'Aproveitar oferta')}
           </button>
         </div>
+        )}
       </div>
     </div>,
     document.body

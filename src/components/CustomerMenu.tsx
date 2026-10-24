@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Category, Product, Order, OrderItem, Testimonial, Promotion, BusinessProfile } from '../types';
@@ -19,7 +20,7 @@ import { summarizeCart, isMarmita, isCoxinha, hasGlutenOption, formatBRL, PRICIN
 import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/phone';
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
-import { DEFAULT_DELIVERY, feeFor, formatKm } from '../lib/delivery';
+import { DEFAULT_DELIVERY, feeFor, formatKm, mapLink } from '../lib/delivery';
 import { StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { AddressForm, QuoteBox, useDeliveryQuote, loadSavedAddress, saveAddress, formatAddress, isAddressComplete, AddressFields } from './DeliveryAddress';
 
@@ -28,6 +29,8 @@ interface CustomerMenuProps {
   products: Product[];
   testimonials: Testimonial[];
   promotions: Promotion[];
+  /** stories que a loja postou no Instagram nas últimas 24 h */
+  instagramStories?: Promotion[];
   profile: BusinessProfile;
   orders: Order[];
   userPhone: string | null;
@@ -41,6 +44,7 @@ export default function CustomerMenu({
   products, 
   testimonials, 
   promotions, 
+  instagramStories = [],
   profile, 
   orders,
   userPhone,
@@ -77,6 +81,8 @@ export default function CustomerMenu({
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [storyIndex, setStoryIndex] = useState<number | null>(null);
+  // Qual lista o visualizador mostra: ofertas do site ou stories do Instagram
+  const [storyList, setStoryList] = useState<'offers' | 'instagram'>('offers');
   const [isFeeOpen, setIsFeeOpen] = useState(false);
   const [loginPhone, setLoginPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao-link' | 'dinheiro'>('pix');
@@ -148,6 +154,50 @@ export default function CustomerMenu({
     });
   }, [products, selectedCategory, searchQuery]);
 
+  // iPhone (Safari): depois que um painel/janela fecha e libera a rolagem, as barras fixas
+  // às vezes ficam fora do lugar. Uma rolagem de 1px força o Safari a reposicionar.
+  useEffect(() => {
+    let locked = false;
+    const nudge = () => requestAnimationFrame(() => { window.scrollBy(0, 1); window.scrollBy(0, -1); });
+    const check = () => {
+      const now = getComputedStyle(document.body).overflow === 'hidden' || getComputedStyle(document.documentElement).overflow === 'hidden' || document.body.style.position === 'fixed';
+      if (locked && !now) { nudge(); setTimeout(nudge, 350); }
+      locked = now;
+    };
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    return () => mo.disconnect();
+  }, []);
+
+  // Avaliações: as mais novas primeiro
+  const google = profile.google;
+  const reviews = useMemo(
+    () => [...testimonials].filter(t => t.comment?.trim()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [testimonials],
+  );
+
+  // Capa das bolinhas de categoria: foto de um prato da própria categoria (as fotos reais primeiro)
+  const coverFor = (categoryId: string) => {
+    const list = products.filter(p => p.categoryId === categoryId && p.available && p.image);
+    return (list.find(p => p.image.startsWith('/produtos/')) || list[0])?.image || '';
+  };
+  // "Todos": mosaico com 4 fotos diferentes do cardápio
+  const allCover = useMemo(() => {
+    const seen = new Set<string>();
+    const pics: string[] = [];
+    for (const c of categories) {
+      const img = coverFor(c.id);
+      if (img && !seen.has(img)) { seen.add(img); pics.push(img); }
+    }
+    for (const p of products) {
+      if (pics.length >= 4) break;
+      if (p.available && p.image && !seen.has(p.image)) { seen.add(p.image); pics.push(p.image); }
+    }
+    return pics.slice(0, 4);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, categories]);
+
   const addToCart = (product: Product, quantity: number = 1, notes?: string) => {
     setCart(prev => {
       const existing = prev.find(item => item.productId === product.id && item.notes === notes);
@@ -201,11 +251,9 @@ export default function CustomerMenu({
   };
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const deliverySettings = profile.delivery ?? { ...DEFAULT_DELIVERY, mode: 'fixed' as const, baseFee: profile.deliveryFee || 0 };
+  const deliverySettings = profile.delivery ?? DEFAULT_DELIVERY;
   const quote = useDeliveryQuote(deliverySettings, addressFields);
-  const goods = summarizeCart(cart, products, 0);
-  const goodsValue = goods.subtotal - goods.discount;
-  const feeResult = feeFor(deliverySettings, quote.status === 'ok' ? quote.km : null, goodsValue);
+  const feeResult = feeFor(deliverySettings, quote.status === 'ok' ? quote.km : null);
   // Taxa "a combinar" quando é por km e ainda não deu pra calcular
   const feeUnknown = deliverySettings.mode === 'per_km' && quote.status !== 'ok';
   const deliveryFee = deliveryType === 'entrega' && !feeUnknown && !feeResult.outOfRange ? feeResult.fee : 0;
@@ -292,7 +340,7 @@ export default function CustomerMenu({
       `*📱 WhatsApp:* ${maskPhone(phone)}`,
       `*💳 Pagamento:* ${paymentLabel(paymentMethod)}`,
       deliveryType === 'entrega'
-        ? `*🛵 Entrega:* ${newOrder.address}${newOrder.deliveryKm ? ` (${formatKm(newOrder.deliveryKm)})` : ''}`
+        ? `*🛵 Entrega:* ${newOrder.address}${newOrder.deliveryKm ? ` (${formatKm(newOrder.deliveryKm)})` : ''}${quote.status === 'ok' && quote.point ? `\n*📍 Mapa:* ${mapLink(quote.point)}` : ''}`
         : '*🏠 Retirada no local*',
       line,
       '*🛒 Itens:*',
@@ -301,7 +349,7 @@ export default function CustomerMenu({
       `Subtotal: ${formatBRL(subtotal)}`,
       discount > 0 ? `Desconto: -${formatBRL(discount)}` : '',
       deliveryType === 'entrega'
-        ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : feeResult.free && !feeUnknown ? 'Entrega grátis' : 'Taxa de entrega: a combinar')
+        ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : 'Taxa de entrega: a combinar')
         : '',
       `*💰 TOTAL: ${formatBRL(total)}*`,
       newOrder.notes ? `\n*📝 Observações:* ${newOrder.notes}` : '',
@@ -426,7 +474,7 @@ export default function CustomerMenu({
           {deliveryType === 'entrega' ? (
             <div className="space-y-3">
               <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="checkout" />
-              <QuoteBox settings={deliverySettings} quote={quote} orderValue={goodsValue} />
+              <QuoteBox settings={deliverySettings} quote={quote} />
             </div>
           ) : profile.address ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">📍 {profile.address}</p>
@@ -465,7 +513,7 @@ export default function CustomerMenu({
             <div className="flex justify-between text-slate-500">
               <span>Entrega</span>
               <span className="tabular-nums">
-                {feeResult.outOfRange ? 'fora da área' : deliveryFee > 0 ? formatBRL(deliveryFee) : feeResult.free && !feeUnknown ? 'grátis' : 'a combinar'}
+                {feeResult.outOfRange ? 'fora da área' : deliveryFee > 0 ? formatBRL(deliveryFee) : 'a combinar'}
               </span>
             </div>
           )}
@@ -487,37 +535,18 @@ export default function CustomerMenu({
 
   return (
     <div className="min-h-screen bg-white pb-24">
-      {/* Instagram Style Header */}
-      <div className="bg-white sticky top-0 z-40 px-4 py-3 border-b border-slate-100 flex items-center justify-between md:hidden">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">@{profile.instagram}</h1>
-          <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
-        </div>
-        <div className="flex items-center gap-4 text-slate-700">
-          <button aria-label="Buscar" onClick={() => {
-            setActiveTab('menu');
-            setTimeout(() => {
-              document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' });
-              searchInputRef.current?.focus();
-            }, 50);
-          }}>
-            <Search className="w-6 h-6" />
-          </button>
-          <button aria-label="Carrinho" className="relative" onClick={() => setIsCartOpen(true)}>
-            <ShoppingCart className="w-6 h-6" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{cartCount}</span>
-            )}
-          </button>
-        </div>
-      </div>
-
       <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
-            <div 
-              className="h-24 w-24 md:h-36 md:w-36 rounded-full p-[2.5px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 cursor-pointer"
-              onClick={() => window.open(`https://instagram.com/${profile.instagram}`, '_blank')}
+            <button
+              type="button"
+              aria-label={instagramStories.length ? 'Ver os stories do Instagram' : 'Ver as novidades'}
+              className={`block h-24 w-24 md:h-36 md:w-36 rounded-full p-[3px] cursor-pointer ${instagramStories.length ? 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600' : stories.length ? 'bg-gradient-to-tr from-lime-400 via-green-500 to-emerald-700' : 'bg-slate-200'}`}
+              onClick={() => {
+                if (instagramStories.length) { setStoryList('instagram'); setStoryIndex(0); }
+                else if (stories.length) { setStoryList('offers'); setStoryIndex(0); }
+                else window.open(`https://instagram.com/${profile.instagram}`, '_blank');
+              }}
             >
               <div className="h-full w-full rounded-full border-2 border-white overflow-hidden bg-white flex items-center justify-center">
                 {profile.profilePicture ? (
@@ -526,11 +555,11 @@ export default function CustomerMenu({
                   <img src="/perfil.jpg" alt="Lev & Fit" className="w-full h-full object-cover" />
                 )}
               </div>
-            </div>
+            </button>
           </div>
           <div className="flex-1 space-y-4 w-full">
             <div className="flex flex-col md:flex-row md:items-center items-center gap-3 md:gap-4">
-              <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-bold text-slate-900">@{profile.instagram}</h1>
                 <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
               </div>
@@ -572,20 +601,15 @@ export default function CustomerMenu({
               <span><strong>{profile.stats.following}</strong> seguindo</span>
             </div>
             <div className="hidden md:block space-y-0.5">
-              <p className="font-bold text-sm md:text-base text-slate-900">{profile.name}</p>
               <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
                 {profile.bio}
-                <div className="mt-1">
-                  <a 
-                    href={`https://instagram.com/${profile.instagram}`} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="text-blue-600 font-semibold hover:underline"
-                  >
-                    @{profile.instagram}
-                  </a>
-                </div>
               </div>
+              {profile.google && (
+                <button type="button" onClick={() => document.getElementById('avaliacoes')?.scrollIntoView({ behavior: 'smooth' })} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  {profile.google.rating.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} no Google • {profile.google.total} avaliações
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -607,20 +631,15 @@ export default function CustomerMenu({
             </div>
           </div>
           <div className="space-y-0.5 px-1 text-center md:text-left">
-            <p className="font-bold text-sm text-slate-900">{profile.name}</p>
             <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
               {profile.bio}
-              <div className="mt-2 flex justify-center md:justify-start">
-                <a 
-                  href={`https://instagram.com/${profile.instagram}`} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="text-blue-600 font-semibold hover:underline"
-                >
-                  @{profile.instagram}
-                </a>
-              </div>
             </div>
+            {profile.google && (
+              <button type="button" onClick={() => document.getElementById('avaliacoes')?.scrollIntoView({ behavior: 'smooth' })} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                {profile.google.rating.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} no Google • {profile.google.total} avaliações
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -636,7 +655,7 @@ export default function CustomerMenu({
             className="space-y-0 pb-24"
           >
             {/* Ofertas logo abaixo do perfil */}
-            <OffersCarousel offers={stories} onOpen={setStoryIndex} />
+            <OffersCarousel offers={stories} onOpen={i => { setStoryList('offers'); setStoryIndex(i); }} />
 
 
             {/* Status + calcular entrega */}
@@ -668,8 +687,10 @@ export default function CustomerMenu({
         >
           <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
-              <div className={`w-full h-full rounded-full flex items-center justify-center text-2xl ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
-                🥘
+              <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-full bg-white">
+                {allCover.map(src => (
+                  <img key={src} src={src} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                ))}
               </div>
             </div>
           </div>
@@ -688,8 +709,8 @@ export default function CustomerMenu({
               <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
-                    {cat.image ? (
-                      <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    {cat.image || coverFor(cat.id) ? (
+                      <img src={cat.image || coverFor(cat.id)} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : cat.emoji ? (
                       cat.emoji
                     ) : (
@@ -707,7 +728,7 @@ export default function CustomerMenu({
       </div>
 
       {/* View Mode Tabs & Search Bar (Sticky Container) */}
-      <div id="produtos" className="sticky top-[53px] md:top-0 bg-white z-30 border-b border-slate-100">
+      <div id="produtos" className="sticky top-16 bg-white z-30 border-b border-slate-100 scroll-mt-16">
         <div className="flex max-w-xs mx-auto relative">
           <button 
             onClick={() => setViewMode('grid')}
@@ -869,6 +890,61 @@ export default function CustomerMenu({
           )}
         </AnimatePresence>
             </div>
+            {/* Avaliações reais do Google */}
+            {reviews.length > 0 && (
+              <section id="avaliacoes" className="mx-auto mt-6 max-w-4xl scroll-mt-20 border-t border-slate-100 px-4 py-10" aria-labelledby="avaliacoes-titulo">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1">
+                    <h2 id="avaliacoes-titulo" className="text-xl font-bold text-slate-900">O que os clientes dizem</h2>
+                    {google && (
+                      <a href={google.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-slate-600 hover:underline">
+                        <span className="text-2xl font-black text-slate-900 tabular-nums">{google.rating.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                        <span className="flex text-amber-400" aria-label={`${google.rating} de 5 estrelas`}>
+                          {[0, 1, 2, 3, 4].map(i => <Star key={i} className={`h-4 w-4 ${i < Math.round(google.rating) ? 'fill-amber-400' : ''}`} />)}
+                        </span>
+                        <span>{google.total} avaliações no Google</span>
+                      </a>
+                    )}
+                  </div>
+                  {google?.reviewUrl && (
+                    <a
+                      href={google.reviewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white hover:bg-slate-800"
+                    >
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> Avaliar no Google
+                    </a>
+                  )}
+                </div>
+                <div className="scrollbar-hide -mx-4 mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2">
+                  {reviews.map(r => (
+                    <article key={r.id} className="flex w-[280px] shrink-0 snap-start flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        {r.avatar ? (
+                          <img src={r.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                        ) : (
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 font-bold text-green-700">{r.name.charAt(0).toUpperCase()}</span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{r.name}</p>
+                          <span className="flex text-amber-400" aria-label={`${r.rating} de 5 estrelas`}>
+                            {[0, 1, 2, 3, 4].map(i => <Star key={i} className={`h-3.5 w-3.5 ${i < r.rating ? 'fill-amber-400' : ''}`} />)}
+                          </span>
+                        </div>
+                        {r.source === 'google' && <span className="ml-auto text-[11px] font-semibold text-slate-400">Google</span>}
+                      </div>
+                      <p className="line-clamp-6 whitespace-pre-line text-sm leading-relaxed text-slate-600">{r.comment}</p>
+                    </article>
+                  ))}
+                </div>
+                {google?.mapsUrl && (
+                  <a href={google.mapsUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-green-700 hover:underline">
+                    Ver todas as avaliações no Google →
+                  </a>
+                )}
+              </section>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -988,6 +1064,7 @@ export default function CustomerMenu({
           </motion.div>
         )}
       </AnimatePresence>
+      {createPortal(<>
       {/* Barra "Ver sacola" (celular) */}
       <AnimatePresence>
         {cartCount > 0 && activeTab === 'menu' && !isCartOpen && (
@@ -1007,6 +1084,7 @@ export default function CustomerMenu({
           </motion.div>
         )}
       </AnimatePresence>
+      </>, document.body)}
 
       {/* Botão do carrinho (computador) */}
       {cartCount > 0 && !isCartOpen && (
@@ -1031,8 +1109,13 @@ export default function CustomerMenu({
         </SheetContent>
       </Sheet>
 
-      {storyIndex !== null && stories.length > 0 && (
-        <StoryViewer stories={stories} startIndex={Math.max(0, storyIndex)} onClose={() => setStoryIndex(null)} onCta={handleStoryCta} />
+      {storyIndex !== null && (storyList === 'instagram' ? instagramStories : stories).length > 0 && (
+        <StoryViewer
+          stories={storyList === 'instagram' ? instagramStories : stories}
+          startIndex={Math.max(0, storyIndex)}
+          onClose={() => setStoryIndex(null)}
+          onCta={handleStoryCta}
+        />
       )}
 
       <Dialog open={isFeeOpen} onOpenChange={setIsFeeOpen}>
@@ -1041,13 +1124,13 @@ export default function CustomerMenu({
             <DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-green-600" /> Calcular entrega</DialogTitle>
             <DialogDescription>
               {deliverySettings.mode === 'per_km'
-                ? 'Coloque seu CEP e número para ver a distância e o valor.'
+                ? 'Use sua localização ou coloque o CEP e o número para ver a distância e o valor exatos.'
                 : 'Confira o valor da entrega para o seu endereço.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="calc" />
-            <QuoteBox settings={deliverySettings} quote={quote} orderValue={goodsValue} />
+            <QuoteBox settings={deliverySettings} quote={quote} />
             <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => { saveAddress(addressFields); setDeliveryType('entrega'); setIsFeeOpen(false); }}>
               Usar esse endereço no pedido
             </Button>
@@ -1239,6 +1322,8 @@ export default function CustomerMenu({
           Painel Administrativo
         </Link>
       </footer>
+      {/* Barras fixas vão direto no <body>: no iPhone, elemento fixo dentro da página às vezes "sobe" junto ao rolar */}
+      {createPortal(<>
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-t border-slate-100 px-6 py-2 flex justify-around items-center md:hidden safe-area-bottom">
         <button 
@@ -1311,6 +1396,7 @@ export default function CustomerMenu({
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
         </span>
       </motion.button>
+      </>, document.body)}
     </div>
   );
 }
