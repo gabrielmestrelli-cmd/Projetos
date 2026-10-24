@@ -68,10 +68,8 @@ export default function App() {
       profile: finalProfile
     }));
 
-    const savedOrders = localStorage.getItem('orders_data');
-    if (savedOrders) {
-      setOrders(JSON.parse(savedOrders));
-    }
+    // Pedidos antigos não ficam mais guardados no navegador (privacidade)
+    localStorage.removeItem('orders_data');
 
     // Fetch from Supabase
     const fetchAllData = async () => {
@@ -147,27 +145,6 @@ export default function App() {
           })));
         }
 
-        // Fetch Orders
-        const { data: ordData, error: ordError } = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (ordData && !ordError) {
-          const formattedOrders: Order[] = ordData.map(o => ({
-            id: o.id,
-            customerName: o.customer_name,
-            customerPhone: o.customer_phone,
-            items: o.items,
-            total: o.total_price,
-            discount: o.discount,
-            paymentMethod: o.payment_method,
-            status: o.status,
-            createdAt: o.created_at,
-          }));
-          setOrders(formattedOrders);
-          localStorage.setItem('orders_data', JSON.stringify(formattedOrders));
-        }
       } catch (err) {
         console.error('Supabase fetch error:', err);
       }
@@ -178,7 +155,6 @@ export default function App() {
     // Subscribe to real-time updates
     const channel = supabase
       .channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_profile' }, () => fetchAllData())
@@ -190,6 +166,93 @@ export default function App() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // ---- Admin: login de verdade pelo Supabase Auth ----
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        setIsAdmin(false);
+      } else {
+        const { data: ok } = await supabase.rpc('is_admin');
+        setIsAdmin(ok === true);
+      }
+      setAuthChecked(true);
+    };
+    check();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(check, 0);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const adminLogin = async (email: string, password: string): Promise<string | null> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return 'E-mail ou senha incorretos';
+    const { data: ok } = await supabase.rpc('is_admin');
+    if (ok !== true) {
+      await supabase.auth.signOut();
+      return 'Esta conta não tem permissão de administrador';
+    }
+    setIsAdmin(true);
+    return null;
+  };
+
+  const adminLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAdmin(false);
+  };
+
+  // ---- Pedidos: admin vê todos; cliente vê só os do próprio telefone ----
+  useEffect(() => {
+    let cancelled = false;
+    const mapOrder = (o: any): Order => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      customerName: o.customer_name,
+      customerPhone: o.customer_phone,
+      items: o.items,
+      total: Number(o.total_price),
+      discount: Number(o.discount) || 0,
+      paymentMethod: o.payment_method,
+      status: o.status,
+      createdAt: o.created_at,
+    });
+
+    const fetchOrders = async () => {
+      if (isAdmin) {
+        const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+        if (!cancelled && data && !error) setOrders(data.map(mapOrder));
+      } else if (userPhone) {
+        const { data, error } = await supabase.rpc('pedidos_do_cliente', { telefone: userPhone });
+        if (!cancelled && Array.isArray(data) && !error) setOrders(data.map(mapOrder));
+      } else {
+        setOrders([]);
+      }
+    };
+
+    fetchOrders();
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (isAdmin) {
+      channel = supabase
+        .channel('orders-admin')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
+        .subscribe();
+    } else if (userPhone) {
+      timer = setInterval(fetchOrders, 30000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+      if (timer) clearInterval(timer);
+    };
+  }, [isAdmin, userPhone]);
 
   // Save data to localStorage and Supabase when it changes
   const updateMenu = async (newCategories: Category[], newProducts: Product[], newTestimonials?: Testimonial[], newPromotions?: Promotion[], newProfile?: BusinessProfile) => {
@@ -285,9 +348,7 @@ export default function App() {
     localStorage.setItem('last_order_number', nextOrderNumber);
     
     const orderWithNumber = { ...order, orderNumber: nextOrderNumber };
-    const newOrders = [orderWithNumber, ...orders];
-    setOrders(newOrders);
-    localStorage.setItem('orders_data', JSON.stringify(newOrders));
+    setOrders(prev => [orderWithNumber, ...prev]);
 
     // Save to Supabase (Background)
     try {
@@ -323,9 +384,7 @@ export default function App() {
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-    const newOrders = orders.map(o => o.id === orderId ? { ...o, status } : o);
-    setOrders(newOrders);
-    localStorage.setItem('orders_data', JSON.stringify(newOrders));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
 
     // Update Supabase
     try {
@@ -388,6 +447,10 @@ export default function App() {
                   profile={profile}
                   onUpdateMenu={updateMenu}
                   onUpdateOrderStatus={updateOrderStatus}
+                  isAdmin={isAdmin}
+                  authChecked={authChecked}
+                  onAdminLogin={adminLogin}
+                  onAdminLogout={adminLogout}
                 />
               } 
             />

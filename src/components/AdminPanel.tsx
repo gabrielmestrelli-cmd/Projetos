@@ -12,11 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Sparkles, Loader2, MessageCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Sparkles, Loader2, MessageCircle, LogOut, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
+import { playCashRegister } from '../lib/sound';
 import { supabase } from '../lib/supabase';
 
 interface AdminPanelProps {
@@ -28,6 +28,10 @@ interface AdminPanelProps {
   profile: BusinessProfile;
   onUpdateMenu: (categories: Category[], products: Product[], testimonials?: Testimonial[], promotions?: Promotion[], profile?: BusinessProfile) => void;
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  isAdmin: boolean;
+  authChecked: boolean;
+  onAdminLogin: (email: string, password: string) => Promise<string | null>;
+  onAdminLogout: () => void;
 }
 
 export default function AdminPanel({ 
@@ -38,10 +42,15 @@ export default function AdminPanel({
   promotions,
   profile,
   onUpdateMenu, 
-  onUpdateOrderStatus 
+  onUpdateOrderStatus,
+  isAdmin,
+  authChecked,
+  onAdminLogin,
+  onAdminLogout
 }: AdminPanelProps) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState('orders');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -119,8 +128,10 @@ export default function AdminPanel({
   const [orderSearch, setOrderSearch] = useState('');
 
   useEffect(() => {
-    if (orders.length > prevOrdersCount) {
-      const newOrder = orders[0];
+    const newOrder = orders[0];
+    const isFresh = newOrder && newOrder.status === 'pending' &&
+      Date.now() - new Date(newOrder.createdAt).getTime() < 2 * 60 * 1000;
+    if (orders.length > prevOrdersCount && isFresh) {
       toast.success(`Novo pedido de ${newOrder.customerName}!`, {
         description: `Total: R$ ${newOrder.total.toFixed(2)}`,
         duration: 10000,
@@ -131,132 +142,39 @@ export default function AdminPanel({
       });
       
       // Play a notification sound if possible
-      try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play();
-      } catch (e) {
-        console.log('Audio playback failed', e);
-      }
+      playCashRegister();
     }
     setPrevOrdersCount(orders.length);
   }, [orders, prevOrdersCount]);
 
   const handleAutoGenerateImages = async () => {
-    console.log('Iniciando handleAutoGenerateImages...');
-    
-    const productsToUpdate = products.filter(p => 
-      !p.image || 
-      p.image.includes('unsplash.com') || 
-      p.image === '' ||
-      p.image.includes('picsum.photos')
-    );
-
-    console.log('Produtos para atualizar:', productsToUpdate.length);
-
-    if (productsToUpdate.length === 0) {
-      toast.info('Todos os produtos já possuem imagens personalizadas.');
-      return;
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('GEMINI_API_KEY não encontrada no ambiente.');
-      toast.error('Erro de configuração: Chave da IA não encontrada.');
-      return;
-    }
-
-    setIsGeneratingImages(true);
-    const ai = new GoogleGenAI({ apiKey });
-    let updatedProducts = [...products];
-    let successCount = 0;
-
-    toast.loading('Iniciando geração de imagens com IA...', { id: 'ai-gen' });
-
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    for (let i = 0; i < productsToUpdate.length; i++) {
-      const product = productsToUpdate[i];
-      const prompt = `Professional food photography of a healthy meal prep container with a 500g portion of ${product.name}. ${product.description}. Bright, natural lighting, top-down view, clean background, high resolution.`;
-      
-      let retries = 0;
-      const maxRetries = 3;
-      let success = false;
-
-      while (retries < maxRetries && !success) {
-        try {
-          console.log(`Gerando imagem para: ${product.name} (Tentativa ${retries + 1})`);
-          toast.loading(`Gerando imagem ${i + 1}/${productsToUpdate.length}: ${product.name}`, { id: 'ai-gen' });
-          
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-              parts: [{ text: prompt }],
-            },
-            config: {
-              imageConfig: {
-                aspectRatio: "1:1"
-              }
-            }
-          });
-
-          const imagePart = response.candidates[0].content.parts.find(p => p.inlineData);
-          if (imagePart?.inlineData) {
-            const base64 = `data:image/png;base64,${imagePart.inlineData.data}`;
-            updatedProducts = updatedProducts.map(p => p.id === product.id ? { ...p, image: base64 } : p);
-            successCount++;
-            success = true;
-            console.log(`Imagem gerada com sucesso para: ${product.name}`);
-            
-            // Delay maior entre sucessos para evitar estourar o limite de RPM (Requests Per Minute)
-            await delay(5000);
-          } else {
-            console.warn(`Nenhuma imagem retornada para: ${product.name}`);
-            success = true; // Não adianta tentar de novo se não veio nada
-          }
-        } catch (error: any) {
-          console.error(`Erro ao gerar imagem para ${product.name}:`, error);
-          
-          const isQuotaError = error.status === 429 || 
-                              (error.message && (error.message.includes('quota') || error.message.includes('RESOURCE_EXHAUSTED')));
-          
-          if (isQuotaError) {
-            retries++;
-            if (retries < maxRetries) {
-              console.log(`Limite de cota atingido. Tentativa ${retries}/${maxRetries}. Aguardando 30s...`);
-              toast.loading(`Limite atingido. Aguardando 30s para tentar ${product.name} novamente...`, { id: 'ai-gen' });
-              await delay(30000); // Espera 30 segundos se bater no limite
-            } else {
-              toast.error(`Cota de IA esgotada. Não foi possível gerar imagem para ${product.name}.`, { id: 'ai-gen' });
-              console.error('Limite de cota persistente. Interrompendo geração em massa.');
-              // Se falhou 3 vezes por cota, provavelmente a cota diária acabou
-              break; 
-            }
-          } else {
-            toast.error(`Erro ao gerar imagem para ${product.name}`);
-            break; // Outro tipo de erro, para de tentar este produto
-          }
-        }
-      }
-    }
-
-    onUpdateMenu(categories, updatedProducts);
-    setIsGeneratingImages(false);
-    toast.dismiss('ai-gen');
-    toast.success(`${successCount} imagens geradas com sucesso!`);
+    // Desativado: a chave da IA ficava visível no código do site.
+    // Para reativar, mover a geração para uma Supabase Edge Function.
+    toast.info('Geração de imagens com IA está desativada nesta versão.');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simple password check - you can change this!
-    if (password === 'admin123') {
-      setIsLoggedIn(true);
-      toast.success('Bem-vindo, Admin!');
+    setIsLoggingIn(true);
+    const error = await onAdminLogin(email.trim(), password);
+    setIsLoggingIn(false);
+    if (error) {
+      toast.error(error);
     } else {
-      toast.error('Senha incorreta');
+      setPassword('');
+      toast.success('Bem-vindo, Admin!');
     }
   };
 
-  if (!isLoggedIn) {
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden">
@@ -270,23 +188,38 @@ export default function AdminPanel({
           <CardContent className="p-8">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Senha de Acesso</Label>
+                <Label htmlFor="email">E-mail</Label>
+                <Input 
+                  id="email"
+                  type="email" 
+                  autoComplete="username"
+                  placeholder="seu@email.com" 
+                  className="h-12 rounded-xl"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
                 <Input 
                   id="password"
                   type="password" 
+                  autoComplete="current-password"
                   placeholder="Digite sua senha..." 
                   className="h-12 rounded-xl"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
               </div>
-              <Button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-lg">
-                Entrar no Painel
+              <Button type="submit" disabled={isLoggingIn} className="w-full h-12 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-lg">
+                {isLoggingIn ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Entrar no Painel'}
               </Button>
             </form>
           </CardContent>
           <CardFooter className="bg-slate-50 p-4 text-center">
-            <p className="text-xs text-slate-400 w-full">Dica: A senha padrão é <span className="font-bold">admin123</span></p>
+            <p className="text-xs text-slate-400 w-full">Acesso apenas para administradores cadastrados no Supabase.</p>
           </CardFooter>
         </Card>
       </div>
@@ -468,6 +401,14 @@ export default function AdminPanel({
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Painel Administrativo</h2>
           <p className="text-slate-500">Gerencie seu cardápio, pedidos e configurações.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => playCashRegister()}>
+            <Volume2 className="mr-2 h-4 w-4" /> Testar som 💰
+          </Button>
+          <Button variant="outline" onClick={onAdminLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Sair
+          </Button>
         </div>
       </div>
 
