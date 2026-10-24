@@ -20,7 +20,7 @@ import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/ph
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
 import { DEFAULT_DELIVERY, feeFor, formatKm } from '../lib/delivery';
-import { StoryRing, StoryViewer, OffersCarousel, orderStories } from './Stories';
+import { StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { AddressForm, QuoteBox, useDeliveryQuote, loadSavedAddress, saveAddress, formatAddress, isAddressComplete, AddressFields } from './DeliveryAddress';
 
 interface CustomerMenuProps {
@@ -638,10 +638,6 @@ export default function CustomerMenu({
             {/* Ofertas logo abaixo do perfil */}
             <OffersCarousel offers={stories} onOpen={setStoryIndex} />
 
-            {/* Stories das ofertas */}
-            <div className="mx-auto max-w-4xl">
-              <StoryRing stories={stories} onOpen={setStoryIndex} />
-            </div>
 
             {/* Status + calcular entrega */}
             <div className="mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4">
