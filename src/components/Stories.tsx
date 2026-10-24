@@ -177,39 +177,42 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
 
 /** Faixa de ofertas no começo da página: passa sozinha e abre o story ao tocar. */
 export function OffersCarousel({ offers, onOpen }: { offers: Promotion[]; onOpen: (index: number) => void }) {
+  // Mostra 3 ofertas por vez; com mais de 3, a faixa anda uma oferta a cada 4,5 s.
   const ref = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const pausedUntil = useRef(0);
+  const VISIBLE = 3;
+  const positions = Math.max(1, offers.length - VISIBLE + 1);
+
+  const step = () => {
+    const el = ref.current;
+    const card = el?.querySelector<HTMLElement>('[data-offer]');
+    if (!el || !card) return 0;
+    return card.offsetWidth + parseFloat(getComputedStyle(el).columnGap || '0');
+  };
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const onScroll = () => {
-      const cards = [...el.querySelectorAll<HTMLElement>('[data-offer]')];
-      const center = el.scrollLeft + el.clientWidth / 2;
-      let best = 0, dist = Infinity;
-      cards.forEach((c, i) => {
-        const d = Math.abs(c.offsetLeft - el.offsetLeft + c.offsetWidth / 2 - center);
-        if (d < dist) { dist = d; best = i; }
-      });
-      setActive(best);
+      const w = step();
+      if (w) setActive(Math.min(positions - 1, Math.round(el.scrollLeft / w)));
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [offers.length]);
+  }, [offers.length, positions]);
 
   useEffect(() => {
-    if (offers.length < 2) return;
+    if (positions < 2) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const t = setInterval(() => {
       const el = ref.current;
       if (!el || Date.now() < pausedUntil.current) return;
-      const cards = el.querySelectorAll<HTMLElement>('[data-offer]');
-      const next = (active + 1) % cards.length;
-      el.scrollTo({ left: cards[next].offsetLeft - el.offsetLeft - 16, behavior: 'smooth' });
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
+      el.scrollTo({ left: atEnd ? 0 : el.scrollLeft + step(), behavior: 'smooth' });
     }, 4500);
     return () => clearInterval(t);
-  }, [active, offers.length]);
+  }, [positions]);
 
   if (offers.length === 0) return null;
   const pause = () => { pausedUntil.current = Date.now() + 8000; };
@@ -220,39 +223,41 @@ export function OffersCarousel({ offers, onOpen }: { offers: Promotion[]; onOpen
         ref={ref}
         onPointerDown={pause}
         onTouchStart={pause}
-        className="scrollbar-hide flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 pt-3"
+        className="scrollbar-hide flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto px-4 pb-2 pt-3 sm:gap-3"
       >
         {offers.map((o, i) => (
           <button
             key={o.id}
             data-offer
             onClick={() => onOpen(i)}
-            className="relative h-40 w-[88%] shrink-0 snap-center overflow-hidden rounded-3xl text-left shadow-md sm:h-48 sm:w-[60%]"
+            className="relative h-44 w-[calc((100%-1rem)/3)] shrink-0 snap-start overflow-hidden rounded-2xl text-left shadow-md sm:h-52 sm:w-[calc((100%-1.5rem)/3)] sm:rounded-3xl"
             aria-label={`Ver oferta: ${o.title}`}
           >
             <img src={o.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" />
-            <div className={`absolute inset-0 bg-gradient-to-r ${o.isLaunch ? 'from-green-950/85 via-green-900/50' : 'from-black/75 via-black/40'} to-transparent`} />
-            <div className="relative flex h-full max-w-[78%] flex-col justify-center gap-1.5 p-5">
+            <div className={`absolute inset-0 bg-gradient-to-t ${o.isLaunch ? 'from-green-950/95 via-green-900/55' : 'from-black/85 via-black/45'} to-transparent`} />
+            <div className="relative flex h-full flex-col justify-between p-2.5 sm:p-4">
               {o.isLaunch ? (
-                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-lime-400 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-950">
-                  <Sparkles className="h-3 w-3" /> Lançamento
+                <span className="inline-flex w-fit items-center gap-0.5 rounded-full bg-lime-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-950 sm:px-2.5 sm:text-[11px]">
+                  <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Lançamento
                 </span>
               ) : (
-                <span className="w-fit rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Oferta</span>
+                <span className="w-fit rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white sm:px-2.5 sm:text-[11px]">Oferta</span>
               )}
-              <h3 className="text-xl font-black leading-tight text-white sm:text-2xl" style={{ textWrap: 'balance' }}>{o.title}</h3>
-              {o.description && <p className="line-clamp-2 text-sm text-white/85">{o.description}</p>}
-              <span className={`mt-1 text-sm font-bold ${o.isLaunch ? 'text-lime-300' : 'text-white'}`}>
-                {o.ctaLabel || (o.isLaunch ? 'Quero provar' : 'Ver oferta')} →
-              </span>
+              <div className="space-y-1">
+                <h3 className="line-clamp-3 text-[13px] font-black leading-tight text-white sm:text-lg" style={{ textWrap: 'balance' }}>{o.title}</h3>
+                {o.description && <p className="hidden line-clamp-2 text-xs text-white/85 sm:block">{o.description}</p>}
+                <span className={`block text-[11px] font-bold sm:text-sm ${o.isLaunch ? 'text-lime-300' : 'text-white'}`}>
+                  {o.ctaLabel || (o.isLaunch ? 'Quero provar' : 'Ver oferta')} →
+                </span>
+              </div>
             </div>
           </button>
         ))}
       </div>
-      {offers.length > 1 && (
+      {positions > 1 && (
         <div className="flex justify-center gap-1.5 pb-1">
-          {offers.map((o, i) => (
-            <span key={o.id} className={`h-1.5 rounded-full transition-all ${i === active ? 'w-5 bg-green-600' : 'w-1.5 bg-slate-300'}`} />
+          {Array.from({ length: positions }, (_, i) => (
+            <span key={i} className={`h-1.5 rounded-full transition-all ${i === active ? 'w-5 bg-green-600' : 'w-1.5 bg-slate-300'}`} />
           ))}
         </div>
       )}
