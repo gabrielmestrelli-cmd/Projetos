@@ -12,11 +12,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Sparkles, Loader2, MessageCircle, LogOut, Volume2 } from 'lucide-react';
+import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Loader2, MessageCircle, LogOut, Volume2, Bike, Store, MapPin, StickyNote, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playCashRegister } from '../lib/sound';
+import { newId } from '../lib/id';
+import { whatsappLink, maskPhone } from '../lib/phone';
+import { formatBRL } from '../lib/pricing';
 import { supabase } from '../lib/supabase';
 
 interface AdminPanelProps {
@@ -26,7 +29,7 @@ interface AdminPanelProps {
   testimonials: Testimonial[];
   promotions: Promotion[];
   profile: BusinessProfile;
-  onUpdateMenu: (categories: Category[], products: Product[], testimonials?: Testimonial[], promotions?: Promotion[], profile?: BusinessProfile) => void;
+  onUpdateMenu: (categories: Category[], products: Product[], testimonials?: Testimonial[], promotions?: Promotion[], profile?: BusinessProfile) => Promise<boolean>;
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
   isAdmin: boolean;
   authChecked: boolean;
@@ -61,15 +64,15 @@ export default function AdminPanel({
   const [isTestimonialDialogOpen, setIsTestimonialDialogOpen] = useState(false);
   const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
   const [qrTableNumber, setQrTableNumber] = useState('1');
-  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncToSupabase = async () => {
     setIsSyncing(true);
     const loadingToast = toast.loading('Sincronizando dados com Supabase...');
     try {
-      await onUpdateMenu(categories, products, testimonials, promotions, profile);
-      toast.success('Dados sincronizados com sucesso!', { id: loadingToast });
+      const ok = await onUpdateMenu(categories, products, testimonials, promotions, profile);
+      if (ok) toast.success('Dados sincronizados com sucesso!', { id: loadingToast });
+      else toast.dismiss(loadingToast);
     } catch (err) {
       console.error('Sync error:', err);
       toast.error('Erro ao sincronizar dados.', { id: loadingToast });
@@ -78,15 +81,38 @@ export default function AdminPanel({
     }
   };
 
+  // Reduz a foto para no máximo 900px e JPEG ~80%: fica leve pro banco e pro celular do cliente
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        callback(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Escolha um arquivo de imagem');
+      return;
     }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 900;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          callback(reader.result as string);
+          return;
+        }
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        callback(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => toast.error('Não foi possível ler essa imagem');
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Product Form State
@@ -124,6 +150,10 @@ export default function AdminPanel({
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState<BusinessProfile>(profile || INITIAL_PROFILE);
+  // Quando o perfil chega do banco, atualiza o formulário
+  useEffect(() => {
+    if (profile) setProfileForm(profile);
+  }, [profile]);
   const [prevOrdersCount, setPrevOrdersCount] = useState(orders.length);
   const [orderSearch, setOrderSearch] = useState('');
 
@@ -133,7 +163,7 @@ export default function AdminPanel({
       Date.now() - new Date(newOrder.createdAt).getTime() < 2 * 60 * 1000;
     if (orders.length > prevOrdersCount && isFresh) {
       toast.success(`Novo pedido de ${newOrder.customerName}!`, {
-        description: `Total: R$ ${newOrder.total.toFixed(2)}`,
+        description: `Pedido #${newOrder.orderNumber || ''} • ${formatBRL(newOrder.total)}`,
         duration: 10000,
         action: {
           label: 'Ver Pedido',
@@ -146,12 +176,6 @@ export default function AdminPanel({
     }
     setPrevOrdersCount(orders.length);
   }, [orders, prevOrdersCount]);
-
-  const handleAutoGenerateImages = async () => {
-    // Desativado: a chave da IA ficava visível no código do site.
-    // Para reativar, mover a geração para uma Supabase Edge Function.
-    toast.info('Geração de imagens com IA está desativada nesta versão.');
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,7 +262,7 @@ export default function AdminPanel({
       toast.success('Produto atualizado');
     } else {
       const newProduct: Product = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: newId(),
         ...productForm as Product,
       };
       newProducts = [...products, newProduct];
@@ -263,7 +287,7 @@ export default function AdminPanel({
       toast.success('Categoria atualizada');
     } else {
       const newCategory: Category = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: newId(),
         ...categoryForm as Category,
       };
       newCategories = [...categories, newCategory];
@@ -316,7 +340,7 @@ export default function AdminPanel({
       toast.success('Depoimento atualizado');
     } else {
       const newT: Testimonial = { 
-        id: Math.random().toString(36).substr(2, 9), 
+        id: newId(), 
         createdAt: new Date().toISOString(),
         ...testimonialForm as Testimonial 
       };
@@ -342,7 +366,7 @@ export default function AdminPanel({
       toast.success('Promoção atualizada');
     } else {
       const newP: Promotion = { 
-        id: Math.random().toString(36).substr(2, 9), 
+        id: newId(), 
         active: true,
         createdAt: new Date().toISOString(),
         ...promotionForm as Promotion 
@@ -459,7 +483,7 @@ export default function AdminPanel({
             disabled={isSyncing}
             className="text-xs border-slate-200 hover:bg-slate-50"
           >
-            {isSyncing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3 text-green-600" />}
+            {isSyncing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-2 h-3 w-3 text-green-600" />}
             Sincronizar tudo com Supabase
           </Button>
         </div>
@@ -603,7 +627,7 @@ export default function AdminPanel({
                 <div className="relative w-48">
                   <ClipboardList className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
-                    placeholder="Buscar nº pedido..." 
+                    placeholder="Nº, nome ou telefone" 
                     className="pl-9 h-9 rounded-lg text-xs"
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
@@ -634,7 +658,13 @@ export default function AdminPanel({
                       </TableRow>
                     ) : (
                       orders
-                        .filter(o => !orderSearch || o.orderNumber?.includes(orderSearch) || o.id.includes(orderSearch))
+                        .filter(o => {
+                          const q = orderSearch.trim().toLowerCase();
+                          if (!q) return true;
+                          return (o.orderNumber || '').toLowerCase().includes(q)
+                            || o.customerName.toLowerCase().includes(q)
+                            || o.customerPhone.includes(q.replace(/\D/g, '') || '§');
+                        })
                         .map((order) => (
                         <TableRow key={order.id}>
                           <TableCell>
@@ -655,32 +685,53 @@ export default function AdminPanel({
                                 {order.customerName}
                               </span>
                               <span className="text-xs text-slate-500 flex items-center gap-1">
-                                {order.customerPhone}
-                                <div className="flex gap-0.5">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-4 w-4 text-green-600" 
-                                    onClick={() => window.open(`https://wa.me/${order.customerPhone.replace(/\D/g, '')}`, '_blank')}
-                                  >
-                                    <MessageCircle className="h-2 w-2" />
-                                  </Button>
-                                </div>
+                                {maskPhone(order.customerPhone)}
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  aria-label="Abrir conversa no WhatsApp"
+                                  className="h-6 w-6 text-green-600" 
+                                  onClick={() => window.open(whatsappLink(order.customerPhone, `Olá ${order.customerName}! Sobre seu pedido #${order.orderNumber || ''} da Lev & Fit:`), '_blank')}
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                </Button>
                               </span>
+                              {order.deliveryType && (
+                                <span className="mt-1 flex items-start gap-1 text-xs text-slate-600">
+                                  {order.deliveryType === 'entrega'
+                                    ? <><Bike className="mt-0.5 h-3 w-3 shrink-0" /><span className="max-w-[220px]">{order.address || 'Entrega'}</span></>
+                                    : <><Store className="mt-0.5 h-3 w-3 shrink-0" /> Retirada</>}
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="text-xs space-y-1">
                               {order.items.map((item, idx) => (
-                                <div key={idx}>{item.quantity}x {item.name}</div>
+                                <div key={idx}>
+                                  <span className="font-semibold">{item.quantity}x</span> {item.name}
+                                  {item.notes && (
+                                    <span className={`ml-1 rounded px-1 font-bold ${item.notes.startsWith('Sem') ? 'bg-blue-100 text-blue-700' : 'text-slate-500'}`}>
+                                      {item.notes}
+                                    </span>
+                                  )}
+                                </div>
                               ))}
+                              {order.notes && (
+                                <div className="mt-1 flex items-start gap-1 rounded bg-amber-50 p-1 text-amber-800">
+                                  <StickyNote className="mt-0.5 h-3 w-3 shrink-0" /> {order.notes}
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="font-medium">
                             <div className="flex flex-col">
-                              <span>{order.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                              <span className="tabular-nums">{formatBRL(order.total)}</span>
                               {order.discount > 0 && (
-                                <span className="text-[10px] text-green-600">Desc: -{order.discount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                <span className="text-[10px] text-green-600">Desc: -{formatBRL(order.discount)}</span>
+                              )}
+                              {!!order.deliveryFee && order.deliveryFee > 0 && (
+                                <span className="text-[10px] text-slate-500">Entrega: {formatBRL(order.deliveryFee)}</span>
                               )}
                             </div>
                           </TableCell>
@@ -689,7 +740,7 @@ export default function AdminPanel({
                               {order.paymentMethod === 'pix' && <Landmark className="h-3 w-3" />}
                               {order.paymentMethod === 'cartao-link' && <CreditCard className="h-3 w-3" />}
                               {order.paymentMethod === 'dinheiro' && <Banknote className="h-3 w-3" />}
-                              <span className="capitalize">{order.paymentMethod.replace('-', ' ')}</span>
+                              <span>{order.paymentMethod === 'pix' ? 'PIX' : order.paymentMethod === 'cartao-link' ? 'Cartão (link)' : 'Dinheiro'}</span>
                             </div>
                           </TableCell>
                           <TableCell>{getStatusBadge(order.status)}</TableCell>
@@ -698,8 +749,10 @@ export default function AdminPanel({
                               value={order.status || 'pending'} 
                               onValueChange={(val) => onUpdateOrderStatus(order.id, val as OrderStatus)}
                             >
-                              <SelectTrigger className="w-[130px] ml-auto">
-                                <SelectValue />
+                              <SelectTrigger className="w-[130px] ml-auto" aria-label="Mudar status">
+                                <SelectValue>
+                                  {(v: string) => ({ pending: 'Pendente', preparing: 'Preparando', delivered: 'Entregue', cancelled: 'Cancelado' } as Record<string, string>)[v] ?? v}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="pending">Pendente</SelectItem>
@@ -724,19 +777,6 @@ export default function AdminPanel({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <h3 className="text-lg font-semibold">Gerenciar Produtos</h3>
             <div className="flex gap-2 w-full sm:w-auto">
-              <Button 
-                variant="outline" 
-                className="flex-1 sm:flex-none border-green-200 text-green-700 hover:bg-green-50"
-                onClick={handleAutoGenerateImages}
-                disabled={isGeneratingImages}
-              >
-                {isGeneratingImages ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
-                )}
-                Gerar com IA
-              </Button>
               <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
               <DialogTrigger render={
                 <Button className="bg-green-600 hover:bg-green-700" onClick={() => {
@@ -765,7 +805,7 @@ export default function AdminPanel({
                       <Label htmlFor="type">Tipo de Entrega</Label>
                       <Select value={productForm.type || 'pronta-entrega'} onValueChange={(val) => setProductForm({...productForm, type: val as any})}>
                         <SelectTrigger id="type">
-                          <SelectValue />
+                          <SelectValue>{(v: string) => (v === 'encomenda' ? 'Sob encomenda' : 'Pronta entrega')}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pronta-entrega">Pronta Entrega</SelectItem>
@@ -778,7 +818,7 @@ export default function AdminPanel({
                     <Label htmlFor="category">Categoria</Label>
                     <Select value={productForm.categoryId || ''} onValueChange={(val) => setProductForm({...productForm, categoryId: val})}>
                       <SelectTrigger id="category">
-                        <SelectValue placeholder="Selecione..." />
+                        <SelectValue placeholder="Selecione...">{(v: string) => categories.find(c => c.id === v)?.name ?? 'Selecione...'}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map(c => (

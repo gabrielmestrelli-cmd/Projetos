@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Category, Product, Order, OrderItem, Testimonial, Promotion, BusinessProfile } from '../types';
 import { ICON_MAP, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, BUSINESS_CONFIG } from '../constants';
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList, Bike, Store, Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
@@ -15,7 +15,10 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../lib/supabase';
+import { summarizeCart, isMarmita, isCoxinha, formatBRL, PRICING } from '../lib/pricing';
+import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/phone';
+import { Textarea } from '@/components/ui/textarea';
+import { newId } from '../lib/id';
 
 interface CustomerMenuProps {
   categories: Category[];
@@ -27,7 +30,7 @@ interface CustomerMenuProps {
   userPhone: string | null;
   onLogin: (phone: string) => void;
   onLogout: () => void;
-  onPlaceOrder: (order: Order) => void;
+  onPlaceOrder: (order: Order) => Promise<string>;
 }
 
 export default function CustomerMenu({ 
@@ -45,7 +48,14 @@ export default function CustomerMenu({
   const [searchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [cart, setCart] = useState<OrderItem[]>([]);
+  const [cart, setCart] = useState<OrderItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('cart');
+      return saved ? (JSON.parse(saved) as OrderItem[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [detailQuantity, setDetailQuantity] = useState(1);
@@ -54,7 +64,15 @@ export default function CustomerMenu({
   
   // Checkout fields
   const [customerName, setCustomerName] = useState(localStorage.getItem('customer_name') || '');
-  const [customerPhone, setCustomerPhone] = useState(userPhone || '');
+  const [customerPhone, setCustomerPhone] = useState(maskPhone(userPhone || ''));
+  const [deliveryType, setDeliveryType] = useState<'entrega' | 'retirada'>(
+    (localStorage.getItem('delivery_type') as 'entrega' | 'retirada') || 'entrega'
+  );
+  const [address, setAddress] = useState(localStorage.getItem('customer_address') || '');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [loginPhone, setLoginPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao-link' | 'dinheiro'>('pix');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -63,14 +81,51 @@ export default function CustomerMenu({
   // Filter orders for the current user
   const myOrders = useMemo(() => {
     if (!userPhone) return [];
-    return orders.filter(o => o.customerPhone === userPhone);
+    const me = normalizePhone(userPhone);
+    return orders.filter(o => normalizePhone(o.customerPhone) === me);
   }, [orders, userPhone]);
 
+  // Carrinho não some se a página recarregar
+  useEffect(() => {
+    try { localStorage.setItem('cart', JSON.stringify(cart)); } catch { /* sem espaço */ }
+  }, [cart]);
+
+  // Se um produto saiu do cardápio ou mudou de preço, o carrinho acompanha
+  useEffect(() => {
+    if (products.length === 0) return;
+    setCart(prev => {
+      const next = prev
+        .filter(item => products.some(p => p.id === item.productId && p.available))
+        .map(item => {
+          const p = products.find(pr => pr.id === item.productId)!;
+          return p.price !== item.price || p.name !== item.name ? { ...item, price: p.price, name: p.name } : item;
+        });
+      const changed = next.length !== prev.length || next.some((it, i) => it !== prev[i]);
+      return changed ? next : prev;
+    });
+  }, [products]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const isNew = (product: Product) =>
+    product.tags?.includes('novidade') ||
+    (product.id.startsWith('mar-') && parseInt(product.id.split('-')[1]) > 4) ||
+    (product.id.startsWith('cal-') && parseInt(product.id.split('-')[1]) > 2) ||
+    (product.id.startsWith('mol-') && parseInt(product.id.split('-')[1]) > 2);
+
+  const hasOptions = (product: Product) => isCoxinha(product) || product.categoryId === 'marmitas';
+
   const filteredProducts = useMemo(() => {
+    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const q = norm(searchQuery.trim());
     return products.filter(p => {
       const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !q || norm(p.name).includes(q) || norm(p.description).includes(q);
       return matchesCategory && matchesSearch && p.available;
     });
   }, [products, selectedCategory, searchQuery]);
@@ -127,123 +182,272 @@ export default function CustomerMenu({
     toast.info('Item removido do carrinho');
   };
 
-  // Bulk Discount Logic
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  
-  const calculateTotal = () => {
-    let subtotal = 0;
-    let marmitaCount = 0;
-    let coxinhaCount = 0;
-    let discount = 0;
+  const deliveryFee = deliveryType === 'entrega' ? (profile.deliveryFee || 0) : 0;
+  const summary = summarizeCart(cart, products, deliveryFee);
+  const { subtotal, discount, total, marmitaCount, coxinhaCount } = summary;
 
-    cart.forEach(item => {
-      subtotal += item.price * item.quantity;
-      if (item.productId.startsWith('mar-')) {
-        marmitaCount += item.quantity;
-      } else if (item.productId.startsWith('cox-')) {
-        coxinhaCount += item.quantity;
-      }
-    });
-
-    // 1. Coxinha Discount: 3 for R$ 24 (Standard is R$ 9 each, so R$ 27 for 3)
-    // Discount = R$ 3 for every 3 coxinhas
-    const coxinhaDiscountGroups = Math.floor(coxinhaCount / 3);
-    discount += coxinhaDiscountGroups * 3;
-
-    // 2. Marmita Bulk Discount
-    // 10+ marmitas = R$ 20 each (R$ 1 discount per unit)
-    // 15+ marmitas = R$ 19 each (R$ 2 discount per unit)
-    let marmitaUnitPrice = 21;
-    if (marmitaCount >= 15) {
-      marmitaUnitPrice = 19;
-      discount += marmitaCount * 2;
-    } else if (marmitaCount >= 10) {
-      marmitaUnitPrice = 20;
-      discount += marmitaCount * 1;
+  const unitPriceLabel = (item: OrderItem) => {
+    const product = products.find(p => p.id === item.productId);
+    const ref = { productId: item.productId, categoryId: product?.categoryId };
+    if (isMarmita(ref) && summary.marmitaTierPrice !== null && summary.marmitaTierPrice < item.price) {
+      return `${formatBRL(summary.marmitaTierPrice)} cada (combo)`;
     }
-
-    const total = subtotal - discount;
-    
-    return { 
-      subtotal, 
-      discount, 
-      total, 
-      marmitaUnitPrice,
-      marmitaCount,
-      coxinhaCount,
-      hasMarmitaDiscount: marmitaCount >= 10,
-      hasCoxinhaDiscount: coxinhaCount >= 3
-    };
+    if (isCoxinha(ref) && coxinhaCount >= PRICING.coxinhaCombo.qty) {
+      return `${formatBRL(item.price)} cada • ${PRICING.coxinhaCombo.qty} por ${formatBRL(PRICING.coxinhaCombo.price)}`;
+    }
+    return `${formatBRL(item.price)} cada`;
   };
 
-  const { subtotal, discount, total, marmitaUnitPrice, marmitaCount, coxinhaCount } = calculateTotal();
+  const paymentLabel = (m: Order['paymentMethod']) =>
+    m === 'pix' ? 'PIX' : m === 'cartao-link' ? 'Cartão (link)' : 'Dinheiro';
 
-  const handlePlaceOrder = () => {
-    if (!customerName || !customerPhone) {
-      toast.error('Por favor, preencha seu nome e telefone');
-      return;
-    }
+  const handlePlaceOrder = async () => {
+    if (isSubmitting) return;
     if (cart.length === 0) {
       toast.error('Seu carrinho está vazio');
       return;
     }
-
-    // Save customer name for next time
-    localStorage.setItem('customer_name', customerName);
-    
-    // Auto-login if not logged in
-    if (!userPhone) {
-      onLogin(customerPhone);
+    if (!customerName.trim()) {
+      toast.error('Informe seu nome');
+      return;
+    }
+    if (!isValidPhone(customerPhone)) {
+      toast.error('Informe um WhatsApp válido com DDD', { description: 'Exemplo: (48) 99999-8888' });
+      return;
+    }
+    if (deliveryType === 'entrega' && address.trim().length < 8) {
+      toast.error('Informe o endereço de entrega', { description: 'Rua, número e bairro' });
+      return;
     }
 
-    // Generate order number here to include in WhatsApp message
-    const lastOrderNumber = localStorage.getItem('last_order_number') || '1000';
-    const nextOrderNumber = (parseInt(lastOrderNumber) + 1).toString();
+    setIsSubmitting(true);
+    try {
+      localStorage.setItem('customer_name', customerName.trim());
+      localStorage.setItem('delivery_type', deliveryType);
+      if (deliveryType === 'entrega') localStorage.setItem('customer_address', address.trim());
+    } catch { /* ignore */ }
+
+    const phone = normalizePhone(customerPhone);
+    if (!userPhone) onLogin(phone);
 
     const newOrder: Order = {
-      id: Math.random().toString(36).substr(2, 9),
-      orderNumber: nextOrderNumber,
-      customerName,
-      customerPhone,
+      id: newId(),
+      customerName: customerName.trim(),
+      customerPhone: phone,
       items: [...cart],
       total,
       discount,
       paymentMethod,
       status: 'pending',
       createdAt: new Date().toISOString(),
+      deliveryType,
+      address: deliveryType === 'entrega' ? address.trim() : undefined,
+      deliveryFee,
+      notes: orderNotes.trim() || undefined,
     };
 
-    onPlaceOrder(newOrder);
+    const orderNumber = await onPlaceOrder(newOrder);
 
-    // WhatsApp Message
-    const message = `*🥗 NOVO PEDIDO - lev&fit*%0A` +
-      `*Número do Pedido: #${nextOrderNumber}*%0A` +
-      `--------------------------------%0A` +
-      `*👤 Cliente:* ${customerName}%0A` +
-      `*📱 Telefone:* ${customerPhone}%0A` +
-      `*💳 Pagamento:* ${paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'cartao-link' ? 'Cartão (Link)' : 'Dinheiro'}%0A` +
-      `--------------------------------%0A` +
-      `*🛒 Itens:*%0A` +
-      cart.map(item => `• ${item.quantity}x ${item.name}${item.notes ? ` _(${item.notes})_` : ''}`).join('%0A') +
-      `%0A--------------------------------%0A` +
-      `*💰 TOTAL: R$ ${total.toFixed(2)}*%0A` +
-      (discount > 0 ? `_Desconto aplicado: R$ ${discount.toFixed(2)}_%0A` : '') +
-      `%0A*Aguardando sua confirmação para combinar a entrega!* ✨`;
+    const line = '--------------------------------';
+    const message = [
+      '*🥗 NOVO PEDIDO - Lev & Fit*',
+      `*Pedido #${orderNumber}*`,
+      line,
+      `*👤 Cliente:* ${newOrder.customerName}`,
+      `*📱 WhatsApp:* ${maskPhone(phone)}`,
+      `*💳 Pagamento:* ${paymentLabel(paymentMethod)}`,
+      deliveryType === 'entrega'
+        ? `*🛵 Entrega:* ${newOrder.address}`
+        : '*🏠 Retirada no local*',
+      line,
+      '*🛒 Itens:*',
+      ...cart.map(item => `• ${item.quantity}x ${item.name}${item.notes ? ` _(${item.notes})_` : ''}`),
+      line,
+      `Subtotal: ${formatBRL(subtotal)}`,
+      discount > 0 ? `Desconto: -${formatBRL(discount)}` : '',
+      deliveryType === 'entrega'
+        ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : 'Taxa de entrega: a combinar')
+        : '',
+      `*💰 TOTAL: ${formatBRL(total)}*`,
+      newOrder.notes ? `\n*📝 Observações:* ${newOrder.notes}` : '',
+      '',
+      'Aguardando confirmação! ✨',
+    ].filter(Boolean).join('\n');
 
-    // Clear cart and close
     setCart([]);
+    setOrderNotes('');
     setIsCartOpen(false);
-    
-    toast.success('Pedido finalizado! Abrindo WhatsApp...');
-    
-    // Open WhatsApp
-    const cleanPhone = profile.phone ? profile.phone.replace(/\D/g, '') : '';
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${message}`;
-    
+    setIsSubmitting(false);
+    toast.success(`Pedido #${orderNumber} registrado! Abrindo o WhatsApp...`);
+
+    const shopPhone = profile.phone || BUSINESS_CONFIG.phone;
     setTimeout(() => {
-      window.location.href = whatsappUrl;
-    }, 500);
+      window.location.href = whatsappLink(shopPhone, message);
+    }, 600);
   };
+
+  const cartBody = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader className="px-6 pt-6 pb-3">
+        <SheetTitle className="flex items-center gap-2 text-2xl font-bold">
+          <ShoppingCart className="h-6 w-6 text-green-600" />
+          Seu pedido
+        </SheetTitle>
+        <SheetDescription className="text-sm">
+          {summary.marmitaTierPrice !== null ? (
+            <span className="block font-bold text-green-700">
+              Combo ativo: marmitas por {formatBRL(summary.marmitaTierPrice)} cada 🎉
+              {summary.marmitasToNextTier !== null && summary.nextTierPrice !== null && (
+                <span className="block font-medium text-slate-500">
+                  Mais {summary.marmitasToNextTier} e cada uma sai por {formatBRL(summary.nextTierPrice)}
+                </span>
+              )}
+            </span>
+          ) : summary.marmitasToNextTier !== null && summary.nextTierPrice !== null && marmitaCount > 0 ? (
+            <span className="block">
+              Faltam <strong>{summary.marmitasToNextTier} marmitas</strong> para pagar {formatBRL(summary.nextTierPrice)} em cada
+            </span>
+          ) : (
+            <span className="block">10 marmitas saem por R$ 20 cada, 15 por R$ 19 cada</span>
+          )}
+          {coxinhaCount >= PRICING.coxinhaCombo.qty && (
+            <span className="block font-bold text-orange-600">Oferta coxinha: 3 por {formatBRL(PRICING.coxinhaCombo.price)} 🥟</span>
+          )}
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4">
+        {!profile.isOpen && (
+          <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            Estamos fechados agora. Você pode mandar o pedido e respondemos assim que abrirmos.
+          </div>
+        )}
+
+        {cart.length === 0 ? (
+          <p className="py-10 text-center text-slate-500">Seu carrinho está vazio.</p>
+        ) : (
+          <div className="space-y-3">
+            {cart.map(item => (
+              <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-bold text-slate-900">
+                    {item.name}
+                    {item.notes && <span className="ml-1 text-green-600">({item.notes})</span>}
+                  </h4>
+                  <p className="text-xs text-slate-500">{unitPriceLabel(item)}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="flex items-center rounded-xl border border-slate-100 bg-white p-1 shadow-sm">
+                    <Button variant="ghost" size="icon" aria-label="Diminuir" className="h-8 w-8 rounded-lg text-slate-500" onClick={() => removeFromCart(item.productId, item.notes)}>
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="w-7 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Aumentar"
+                      className="h-8 w-8 rounded-lg text-green-600"
+                      onClick={() => updateQuantity(item.productId, item.quantity + 1, item.notes)}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Button variant="ghost" size="icon" aria-label="Remover" className="h-9 w-9 rounded-xl text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => clearItemFromCart(item.productId, item.notes)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-900">Seus dados</h3>
+          <div className="space-y-1.5">
+            <Label htmlFor="checkout-name" className="text-xs font-bold uppercase text-slate-500">Nome</Label>
+            <Input id="checkout-name" autoComplete="name" placeholder="Como podemos te chamar?" className="h-11 rounded-xl border-none bg-slate-50" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="checkout-phone" className="text-xs font-bold uppercase text-slate-500">WhatsApp</Label>
+            <Input id="checkout-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="(48) 99999-8888" className="h-11 rounded-xl border-none bg-slate-50" value={customerPhone} onChange={e => setCustomerPhone(maskPhone(e.target.value))} />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-900">Como quer receber?</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant={deliveryType === 'entrega' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'entrega' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('entrega')}>
+              <Bike className="h-5 w-5" />
+              <span className="text-xs font-bold">
+                Entrega {profile.deliveryFee ? `• ${formatBRL(profile.deliveryFee)}` : '• a combinar'}
+              </span>
+            </Button>
+            <Button variant={deliveryType === 'retirada' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'retirada' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('retirada')}>
+              <Store className="h-5 w-5" />
+              <span className="text-xs font-bold">Retirar no local</span>
+            </Button>
+          </div>
+          {deliveryType === 'entrega' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="checkout-address" className="text-xs font-bold uppercase text-slate-500">Endereço de entrega</Label>
+              <Textarea id="checkout-address" autoComplete="street-address" rows={2} placeholder="Rua, número, bairro e cidade" className="rounded-xl border-none bg-slate-50" value={address} onChange={e => setAddress(e.target.value)} />
+            </div>
+          ) : profile.address ? (
+            <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">📍 {profile.address}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-900">Pagamento</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { id: 'pix', label: 'PIX', Icon: Landmark },
+              { id: 'cartao-link', label: 'Cartão (link)', Icon: CreditCard },
+              { id: 'dinheiro', label: 'Dinheiro', Icon: Banknote },
+            ] as const).map(({ id, label, Icon }) => (
+              <Button key={id} variant={paymentMethod === id ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${paymentMethod === id ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setPaymentMethod(id)}>
+                <Icon className="h-5 w-5" />
+                <span className="text-[11px] font-bold">{label}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="checkout-notes" className="text-xs font-bold uppercase text-slate-500">Observações (opcional)</Label>
+          <Textarea id="checkout-notes" rows={2} placeholder="Ex.: troco para R$ 100, portão azul, sem cebola..." className="rounded-xl border-none bg-slate-50" value={orderNotes} onChange={e => setOrderNotes(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="space-y-3 border-t border-slate-100 bg-white px-6 pt-4 pb-6">
+        <div className="space-y-1 text-sm">
+          <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="tabular-nums">{formatBRL(subtotal)}</span></div>
+          {discount > 0 && (
+            <div className="flex justify-between font-bold text-green-600"><span>Descontos</span><span className="tabular-nums">- {formatBRL(discount)}</span></div>
+          )}
+          {deliveryType === 'entrega' && (
+            <div className="flex justify-between text-slate-500">
+              <span>Entrega</span>
+              <span className="tabular-nums">{deliveryFee > 0 ? formatBRL(deliveryFee) : 'a combinar'}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1 text-2xl font-black text-slate-900">
+            <span>Total</span>
+            <span className="text-green-600 tabular-nums">{formatBRL(total)}</span>
+          </div>
+        </div>
+        <Button
+          className="h-14 w-full rounded-2xl bg-green-600 text-lg font-bold shadow-lg transition-transform hover:bg-green-700 active:scale-95"
+          onClick={handlePlaceOrder}
+          disabled={isSubmitting || cart.length === 0}
+        >
+          {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Enviar pedido pelo WhatsApp'}
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-white pb-24">
@@ -254,8 +458,21 @@ export default function CustomerMenu({
           <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
         </div>
         <div className="flex items-center gap-4 text-slate-700">
-          <Search className="w-6 h-6" />
-          <ShoppingCart className="w-6 h-6" onClick={() => setIsCartOpen(true)} />
+          <button aria-label="Buscar" onClick={() => {
+            setActiveTab('menu');
+            setTimeout(() => {
+              document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' });
+              searchInputRef.current?.focus();
+            }, 50);
+          }}>
+            <Search className="w-6 h-6" />
+          </button>
+          <button aria-label="Carrinho" className="relative" onClick={() => setIsCartOpen(true)}>
+            <ShoppingCart className="w-6 h-6" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{cartCount}</span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -301,7 +518,7 @@ export default function CustomerMenu({
                   variant="outline" 
                   size="sm" 
                   className="h-9 px-3 font-semibold border-slate-200 hover:bg-slate-50 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
-                  onClick={() => window.open(`https://wa.me/${profile.phone.replace(/\D/g, '')}`, '_blank')}
+                  onClick={() => window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank')}
                 >
                   <MessageCircle className="h-3 w-3" />
                   WhatsApp
@@ -500,7 +717,8 @@ export default function CustomerMenu({
           <div className="relative max-w-md mx-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input 
-              placeholder="O que você quer comer hoie?" 
+              ref={searchInputRef}
+              placeholder="O que você quer comer hoje?" 
               className="pl-10 h-10 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-green-500 shadow-none transition-all focus:bg-white"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -539,10 +757,8 @@ export default function CustomerMenu({
                     </div>
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex flex-col gap-1">
-                        <span className="font-bold text-green-700 text-lg">R$ {product.price.toFixed(2)}</span>
-                        {(product.id.startsWith('mar-') && parseInt(product.id.split('-')[1]) > 4) || 
-                         (product.id.startsWith('cal-') && parseInt(product.id.split('-')[1]) > 2) ||
-                         (product.id.startsWith('mol-') && parseInt(product.id.split('-')[1]) > 2) ? (
+                        <span className="font-bold text-green-700 text-lg">{formatBRL(product.price)}</span>
+                        {isNew(product) ? (
                           <Badge className="w-fit bg-purple-100 text-purple-700 border-none text-[9px] px-2 h-5 font-bold">NOVIDADE ✨</Badge>
                         ) : null}
                       </div>
@@ -551,7 +767,7 @@ export default function CustomerMenu({
                         className="bg-green-600 hover:bg-green-700 h-9 px-4 rounded-lg font-bold shadow-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (product.id.startsWith('cox-') || product.categoryId === 'marmitas') {
+                          if (hasOptions(product)) {
                             setSelectedProduct(product);
                           } else {
                             addToCart(product);
@@ -602,7 +818,7 @@ export default function CustomerMenu({
                     className="absolute bottom-1 right-1 bg-green-600 rounded-lg p-1 shadow-lg z-10"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (product.id.startsWith('cox-') || product.categoryId === 'marmitas') {
+                      if (hasOptions(product)) {
                         setSelectedProduct(product);
                       } else {
                         addToCart(product);
@@ -620,9 +836,7 @@ export default function CustomerMenu({
                         500g
                       </Badge>
                     )}
-                    {((product.id.startsWith('mar-') && parseInt(product.id.split('-')[1]) > 4) || 
-                      (product.id.startsWith('cal-') && parseInt(product.id.split('-')[1]) > 2) ||
-                      (product.id.startsWith('mol-') && parseInt(product.id.split('-')[1]) > 2)) && (
+                    {isNew(product) && (
                       <Badge className="bg-purple-600/80 backdrop-blur-sm text-white border-none text-[7px] px-1 h-3.5 font-bold">
                         NEW
                       </Badge>
@@ -665,18 +879,20 @@ export default function CustomerMenu({
                   <Input 
                     placeholder="(00) 00000-0000" 
                     className="h-12 rounded-2xl bg-white border-slate-200 text-center text-lg font-medium"
+                    type="tel"
+                    inputMode="tel"
                     value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
+                    onChange={(e) => setLoginPhone(maskPhone(e.target.value))}
                   />
                   <Button 
                     className="w-full h-12 bg-green-600 hover:bg-green-700 rounded-2xl font-bold text-base shadow-lg shadow-green-100"
                     onClick={() => {
-                      if (loginPhone.length < 8) {
-                        toast.error('Informe um telefone válido');
+                      if (!isValidPhone(loginPhone)) {
+                        toast.error('Informe um WhatsApp válido com DDD');
                         return;
                       }
                       onLogin(loginPhone);
-                      setCustomerPhone(loginPhone);
+                      setCustomerPhone(maskPhone(loginPhone));
                     }}
                   >
                     Entrar
@@ -730,19 +946,19 @@ export default function CustomerMenu({
                       <div className="space-y-1">
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex justify-between text-sm">
-                            <span className="text-slate-600">{item.quantity}x {item.name}</span>
-                            <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                            <span className="text-slate-600">{item.quantity}x {item.name}{item.notes ? ` (${item.notes})` : ''}</span>
+                            <span className="font-medium tabular-nums">{formatBRL(item.price * item.quantity)}</span>
                           </div>
                         ))}
                       </div>
                       <Separator />
                       <div className="flex justify-between items-center font-bold">
                         <span>Total</span>
-                        <span className="text-green-600">R$ {order.total.toFixed(2)}</span>
+                        <span className="text-green-600 tabular-nums">{formatBRL(order.total)}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 text-right">
-                        {new Date(order.createdAt).toLocaleDateString('pt-BR')} às {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      {order.discount > 0 && (
+                        <p className="text-right text-xs text-green-600">Você economizou {formatBRL(order.discount)}</p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -751,381 +967,49 @@ export default function CustomerMenu({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Barra "Ver sacola" (celular) */}
       <AnimatePresence>
-        {cartCount > 0 && activeTab === 'menu' && (
-          <motion.div 
+        {cartCount > 0 && activeTab === 'menu' && !isCartOpen && (
+          <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-20 left-4 right-4 z-50 md:hidden"
+            className="fixed bottom-20 left-4 right-4 z-40 md:hidden"
           >
-            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <SheetTrigger
-                render={
-                  <Button className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-2xl flex items-center justify-between px-6 font-bold border-2 border-white/20 backdrop-blur-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white/20 px-2 py-1 rounded-lg text-xs">
-                        {cartCount}
-                      </div>
-                      <span>Ver Sacola</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white/80 text-xs font-normal">Total</span>
-                      <span>R$ {total.toFixed(2)}</span>
-                    </div>
-                  </Button>
-                }
-              />
-              <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
-                <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
-                <div className="px-6 pb-6 h-full flex flex-col">
-                  <SheetHeader className="pb-4">
-                    <SheetTitle className="flex items-center gap-2 text-2xl font-bold">
-                      <ShoppingCart className="h-6 w-6 text-green-600" />
-                      Carrinho
-                    </SheetTitle>
-                    <SheetDescription className="text-sm">
-                      <div className="space-y-1">
-                        {marmitaCount >= 15 ? (
-                          <span className="block text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
-                        ) : marmitaCount >= 10 ? (
-                          <span className="block text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
-                        ) : (
-                          <span className="block">Adicione 10 ou 15 marmitas para ganhar descontos!</span>
-                        )}
-                        {coxinhaCount >= 3 && (
-                          <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
-                        )}
-                      </div>
-                    </SheetDescription>
-                  </SheetHeader>
-                  
-                  <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                    <div className="space-y-3">
-                      {cart.map((item) => (
-                        <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <div className="flex-1">
-                            <h4 className="font-bold text-sm text-slate-900">
-                              {item.name}
-                              {item.notes && <span className="text-green-600 ml-1">({item.notes})</span>}
-                            </h4>
-                            <p className="text-xs text-slate-500">
-                              {item.productId.startsWith('mar-') ? (
-                                <>R$ {marmitaUnitPrice.toFixed(2)} cada</>
-                              ) : item.productId.startsWith('cox-') && coxinhaCount >= 3 ? (
-                                <>R$ 8,00 cada (Oferta 3 por 24)</>
-                              ) : (
-                                <>R$ {item.price.toFixed(2)} cada</>
-                              )}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 rounded-lg text-slate-400"
-                                onClick={() => removeFromCart(item.productId, item.notes)}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <Select 
-                                value={item.quantity.toString()} 
-                                onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
-                              >
-                                <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="min-w-[4rem]">
-                                  {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
-                                    <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 rounded-lg text-green-600"
-                                onClick={() => {
-                                  const p = products.find(prod => prod.id === item.productId);
-                                  if (p) addToCart(p, 1, item.notes);
-                                }}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                              onClick={() => clearItemFromCart(item.productId, item.notes)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="font-bold text-slate-900">Seus Dados</h3>
-                      <div className="grid gap-4">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="name-mobile" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
-                          <Input id="name-mobile" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="phone-mobile" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
-                          <Input id="phone-mobile" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="font-bold text-slate-900">Pagamento</h3>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button 
-                          variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
-                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-600' : 'bg-white'}`}
-                          onClick={() => setPaymentMethod('pix')}
-                        >
-                          <Landmark className="h-5 w-5" />
-                          <span className="text-[10px] font-bold">PIX</span>
-                        </Button>
-                        <Button 
-                          variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
-                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'cartao-link' ? 'bg-green-600' : 'bg-white'}`}
-                          onClick={() => setPaymentMethod('cartao-link')}
-                        >
-                          <CreditCard className="h-5 w-5" />
-                          <span className="text-[10px] font-bold">Cartão</span>
-                        </Button>
-                        <Button 
-                          variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
-                          className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'dinheiro' ? 'bg-green-600' : 'bg-white'}`}
-                          onClick={() => setPaymentMethod('dinheiro')}
-                        >
-                          <Banknote className="h-5 w-5" />
-                          <span className="text-[10px] font-bold">Dinheiro</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 space-y-4 bg-white">
-                    <Separator />
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-slate-500">
-                        <span>Subtotal</span>
-                        <span>R$ {subtotal.toFixed(2)}</span>
-                      </div>
-                      {discount > 0 && (
-                        <div className="flex justify-between text-sm text-green-600 font-bold">
-                          <span>Descontos Aplicados</span>
-                          <span>- R$ {discount.toFixed(2)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between text-2xl font-black text-slate-900">
-                        <span>Total</span>
-                        <span className="text-green-600">
-                          R$ {total.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                    <Button 
-                      className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg font-bold rounded-2xl shadow-lg transition-transform active:scale-95"
-                      onClick={handlePlaceOrder}
-                    >
-                      Finalizar Pedido
-                    </Button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+            <Button onClick={() => setIsCartOpen(true)} className="flex h-14 w-full items-center justify-between rounded-2xl border-2 border-white/20 bg-green-600 px-6 font-bold text-white shadow-2xl hover:bg-green-700">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-white/20 px-2 py-1 text-xs tabular-nums">{cartCount}</div>
+                <span>Ver sacola</span>
+              </div>
+              <span className="tabular-nums">{formatBRL(total)}</span>
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="hidden md:block">
-        {cartCount > 0 && (
-          <div className="fixed bottom-6 right-6 z-50">
-            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <SheetTrigger
-                render={
-                  <Button size="lg" className="h-16 rounded-full bg-green-600 shadow-2xl hover:bg-green-700 border-4 border-white px-8">
-                    <ShoppingCart className="mr-2 h-6 w-6" />
-                    Carrinho ({cartCount})
-                    <span className="ml-4 font-bold text-xl">
-                      R$ {total.toFixed(2)}
-                    </span>
-                  </Button>
-                }
-              />
-              <SheetContent side="right" className="w-full sm:max-w-md border-none shadow-2xl">
-                <SheetHeader className="pb-4">
-                  <SheetTitle className="flex items-center gap-2 text-2xl">
-                    <ShoppingCart className="h-6 w-6 text-green-600" />
-                    Seu Pedido
-                  </SheetTitle>
-                  <SheetDescription>
-                    <div className="space-y-1 mt-2">
-                      {marmitaCount >= 15 ? (
-                        <Badge className="bg-green-100 text-green-700 border-none">Combo 15+ marmitas: R$ 19,00 cada! 🎉</Badge>
-                      ) : marmitaCount >= 10 ? (
-                        <Badge className="bg-blue-100 text-blue-700 border-none">Combo 10+ marmitas: R$ 20,00 cada!</Badge>
-                      ) : (
-                        <p className="text-xs text-slate-500">Adicione 10 ou 15 marmitas para ganhar descontos!</p>
-                      )}
-                      {coxinhaCount >= 3 && (
-                        <Badge className="bg-orange-100 text-orange-700 border-none ml-1">Oferta Coxinha: 3 por R$ 24,00! 🥟</Badge>
-                      )}
-                    </div>
-                  </SheetDescription>
-                </SheetHeader>
-                
-                <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                  <div className="space-y-4">
-                    {cart.map((item) => (
-                      <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-4 bg-slate-50 p-3 rounded-2xl">
-                        <div className="flex-1">
-                          <h4 className="font-bold text-sm">
-                            {item.name}
-                            {item.notes && <span className="text-green-600 ml-1">({item.notes})</span>}
-                          </h4>
-                          <p className="text-xs text-slate-500">
-                            {item.productId.startsWith('mar-') ? (
-                              <>R$ {marmitaUnitPrice.toFixed(2)} cada</>
-                            ) : item.productId.startsWith('cox-') && coxinhaCount >= 3 ? (
-                              <>R$ 8,00 cada (Oferta 3 por 24)</>
-                            ) : (
-                              <>R$ {item.price.toFixed(2)} cada</>
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-100">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 rounded-lg text-slate-400"
-                              onClick={() => removeFromCart(item.productId, item.notes)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Select 
-                              value={item.quantity.toString()} 
-                              onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
-                            >
-                              <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="min-w-[4rem]">
-                                {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
-                                  <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 rounded-lg text-green-600"
-                              onClick={() => {
-                                const p = products.find(prod => prod.id === item.productId);
-                                if (p) addToCart(p, 1, item.notes);
-                              }}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                            onClick={() => clearItemFromCart(item.productId, item.notes)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
 
-                  <div className="space-y-4">
-                    <h3 className="font-bold text-lg">Seus Dados</h3>
-                    <div className="grid gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="name-desktop">Nome Completo</Label>
-                        <Input id="name-desktop" placeholder="Como podemos te chamar?" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="phone-desktop">WhatsApp</Label>
-                        <Input id="phone-desktop" placeholder="(00) 00000-0000" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
+      {/* Botão do carrinho (computador) */}
+      {cartCount > 0 && !isCartOpen && (
+        <div className="fixed bottom-6 right-6 z-40 hidden md:block">
+          <Button size="lg" onClick={() => setIsCartOpen(true)} className="h-16 rounded-full border-4 border-white bg-green-600 px-8 shadow-2xl hover:bg-green-700">
+            <ShoppingCart className="mr-2 h-6 w-6" />
+            Carrinho ({cartCount})
+            <span className="ml-4 text-xl font-bold tabular-nums">{formatBRL(total)}</span>
+          </Button>
+        </div>
+      )}
 
-                  <div className="space-y-4">
-                    <h3 className="font-bold text-lg">Forma de Pagamento</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button 
-                        variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
-                        className={`flex-col h-20 gap-1 ${paymentMethod === 'pix' ? 'bg-green-600' : ''}`}
-                        onClick={() => setPaymentMethod('pix')}
-                      >
-                        <Landmark className="h-5 w-5" />
-                        <span className="text-[10px]">PIX</span>
-                      </Button>
-                      <Button 
-                        variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
-                        className={`flex-col h-20 gap-1 ${paymentMethod === 'cartao-link' ? 'bg-green-600' : ''}`}
-                        onClick={() => setPaymentMethod('cartao-link')}
-                      >
-                        <CreditCard className="h-5 w-5" />
-                        <span className="text-[10px]">Cartão (Link)</span>
-                      </Button>
-                      <Button 
-                        variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
-                        className={`flex-col h-20 gap-1 ${paymentMethod === 'dinheiro' ? 'bg-green-600' : ''}`}
-                        onClick={() => setPaymentMethod('dinheiro')}
-                      >
-                        <Banknote className="h-5 w-5" />
-                        <span className="text-[10px]">Dinheiro</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+      {/* Um único carrinho para celular e computador */}
+      <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <SheetContent
+          side={isDesktop ? 'right' : 'bottom'}
+          className={isDesktop
+            ? 'w-full gap-0 border-none p-0 shadow-2xl sm:max-w-md'
+            : 'mx-auto gap-0 overflow-hidden rounded-t-[2rem] border-none p-0 shadow-2xl data-[side=bottom]:h-[92dvh] sm:max-w-lg'}
+        >
+          {cartBody}
+        </SheetContent>
+      </Sheet>
 
-                <div className="pt-6 space-y-4">
-                  <Separator />
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm text-slate-500">
-                      <span>Subtotal</span>
-                      <span>R$ {subtotal.toFixed(2)}</span>
-                    </div>
-                    {discount > 0 && (
-                      <div className="flex justify-between text-sm text-green-600 font-medium">
-                        <span>Descontos Aplicados</span>
-                        <span>- R$ {discount.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-2xl font-black">
-                      <span>Total</span>
-                      <span className="text-green-600">
-                        R$ {total.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                  <Button 
-                    className="w-full h-14 bg-green-600 hover:bg-green-700 text-xl font-bold rounded-2xl shadow-lg"
-                    onClick={handlePlaceOrder}
-                  >
-                    Finalizar Pedido
-                  </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
-        )}
-      </div>
       {/* Product Detail Dialog */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => {
         if (!open) {
@@ -1213,7 +1097,7 @@ export default function CustomerMenu({
                   </div>
                 )}
 
-                {selectedProduct.id.startsWith('cox-') && (
+                {isCoxinha(selectedProduct) && (
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Leaf className="w-3 h-3" />
@@ -1242,7 +1126,7 @@ export default function CustomerMenu({
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-400 font-medium">Preço unitário</span>
-                      <span className="text-2xl font-bold text-green-700">R$ {selectedProduct.price.toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-green-700">{formatBRL(selectedProduct.price)}</span>
                     </div>
                     
                     <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100">
@@ -1282,7 +1166,7 @@ export default function CustomerMenu({
                     className="w-full bg-green-600 hover:bg-green-700 text-white h-14 rounded-xl font-bold shadow-lg shadow-green-200 transition-all active:scale-95 text-lg"
                     onClick={() => {
                       let notes: string | undefined = undefined;
-                      if (selectedProduct.id.startsWith('cox-')) {
+                      if (isCoxinha(selectedProduct)) {
                         notes = detailGluten === 'com' ? 'Com Glúten' : 'Sem Glúten';
                       } else if (selectedProduct.categoryId === 'marmitas') {
                         notes = detailLactose === 'com' ? 'Com Lactose' : 'Sem Lactose';
@@ -1295,7 +1179,7 @@ export default function CustomerMenu({
                       setDetailLactose('com');
                     }}
                   >
-                    Adicionar {detailQuantity > 1 ? `${detailQuantity} itens` : 'à Sacola'} • R$ {(selectedProduct.price * detailQuantity).toFixed(2)}
+                    Adicionar {detailQuantity > 1 ? `${detailQuantity} itens` : 'à sacola'} • {formatBRL(selectedProduct.price * detailQuantity)}
                   </Button>
                 </div>
               </div>
@@ -1305,7 +1189,7 @@ export default function CustomerMenu({
       </Dialog>
       {/* Discreet Footer with Admin Link */}
       <footer className="py-8 px-4 border-t border-slate-50 text-center space-y-2">
-        <p className="text-xs text-slate-300">© 2024 lev&fit - Marmitas Congeladas</p>
+        <p className="text-xs text-slate-300">© {new Date().getFullYear()} Lev & Fit - Marmitas Congeladas</p>
         <Link to="/admin" className="text-[10px] text-slate-100 hover:text-green-600 transition-colors opacity-10 hover:opacity-100">
           Painel Administrativo
         </Link>
@@ -1338,188 +1222,18 @@ export default function CustomerMenu({
           <span className="text-[10px] font-medium">Instagram</span>
         </a>
         
-        <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-          <SheetTrigger
-            render={
-              <button 
-                className="flex flex-col items-center gap-1 text-slate-400 relative"
-              >
-                <ShoppingCart className="w-6 h-6" />
-                <span className="text-[10px] font-medium">Carrinho</span>
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border-2 border-white">
-                    {cartCount}
-                  </span>
-                )}
-              </button>
-            }
-          />
-          <SheetContent side="bottom" className="h-[92vh] rounded-t-[2.5rem] sm:max-w-lg mx-auto border-none shadow-2xl p-0 overflow-hidden">
-            <div className="h-1.5 w-12 bg-slate-200 rounded-full mx-auto mt-3 mb-2" />
-            <div className="px-6 pb-6 h-full flex flex-col">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="flex items-center gap-2 text-2xl font-bold">
-                  <ShoppingCart className="h-6 w-6 text-green-600" />
-                  Carrinho
-                </SheetTitle>
-                <SheetDescription className="text-sm">
-                  <div className="space-y-1">
-                    {marmitaCount >= 15 ? (
-                      <span className="block text-green-600 font-bold">Combo 15+ marmitas: R$ 19,00 cada! 🎉</span>
-                    ) : marmitaCount >= 10 ? (
-                      <span className="block text-blue-600 font-bold">Combo 10+ marmitas: R$ 20,00 cada!</span>
-                    ) : (
-                      <span className="block">Adicione 10 ou 15 marmitas para ganhar descontos!</span>
-                    )}
-                    {coxinhaCount >= 3 && (
-                      <span className="block text-orange-600 font-bold">Oferta Coxinha: 3 por R$ 24,00! 🥟</span>
-                    )}
-                  </div>
-                </SheetDescription>
-              </SheetHeader>
-              
-              <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                <div className="space-y-3">
-                  {cart.map((item) => (
-                    <div key={`${item.productId}-${item.notes || ''}`} className="flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-sm text-slate-900">
-                          {item.name}
-                          {item.notes && <span className="text-green-600 ml-1">({item.notes})</span>}
-                        </h4>
-                        <p className="text-xs text-slate-500">
-                          {item.productId.startsWith('mar-') ? (
-                            <>R$ {marmitaUnitPrice.toFixed(2)} cada</>
-                          ) : item.productId.startsWith('cox-') && coxinhaCount >= 3 ? (
-                            <>R$ 8,00 cada (Oferta 3 por 24)</>
-                          ) : (
-                            <>R$ {item.price.toFixed(2)} cada</>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-lg text-slate-400"
-                            onClick={() => removeFromCart(item.productId, item.notes)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <Select 
-                            value={item.quantity.toString()} 
-                            onValueChange={(val) => updateQuantity(item.productId, parseInt(val), item.notes)}
-                          >
-                            <SelectTrigger className="h-8 w-10 border-none bg-transparent p-0 font-bold text-sm focus:ring-0 shadow-none justify-center">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="min-w-[4rem]">
-                              {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
-                                <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-lg text-green-600"
-                            onClick={() => {
-                              const p = products.find(prod => prod.id === item.productId);
-                              if (p) addToCart(p, 1, item.notes);
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                          onClick={() => clearItemFromCart(item.productId, item.notes)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-4 px-1">
-                  <h3 className="font-bold text-slate-900">Seus Dados</h3>
-                  <div className="grid gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="name" className="text-xs font-bold text-slate-500 uppercase">Nome Completo</Label>
-                      <Input id="name" placeholder="Como podemos te chamar?" className="rounded-xl bg-slate-50 border-none h-11 px-4" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone" className="text-xs font-bold text-slate-500 uppercase">WhatsApp</Label>
-                      <Input id="phone" placeholder="(00) 00000-0000" className="rounded-xl bg-slate-50 border-none h-11 px-4" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-bold text-slate-900">Pagamento</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant={paymentMethod === 'pix' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('pix')}
-                    >
-                      <Landmark className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">PIX</span>
-                    </Button>
-                    <Button 
-                      variant={paymentMethod === 'cartao-link' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'cartao-link' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('cartao-link')}
-                    >
-                      <CreditCard className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">Cartão</span>
-                    </Button>
-                    <Button 
-                      variant={paymentMethod === 'dinheiro' ? 'default' : 'outline'} 
-                      className={`flex-col h-20 gap-1 rounded-2xl ${paymentMethod === 'dinheiro' ? 'bg-green-600' : 'bg-white'}`}
-                      onClick={() => setPaymentMethod('dinheiro')}
-                    >
-                      <Banknote className="h-5 w-5" />
-                      <span className="text-[10px] font-bold">Dinheiro</span>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6 space-y-4 bg-white">
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Subtotal</span>
-                    <span>R$ {subtotal.toFixed(2)}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600 font-bold">
-                      <span>Descontos Aplicados</span>
-                      <span>- R$ {discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-2xl font-black text-slate-900">
-                    <span>Total</span>
-                    <span className="text-green-600">
-                      R$ {total.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-                <Button 
-                  className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg font-bold rounded-2xl shadow-lg transition-transform active:scale-95"
-                  onClick={handlePlaceOrder}
-                >
-                  Finalizar Pedido
-                </Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="relative flex flex-col items-center gap-1 text-slate-400"
+        >
+          <ShoppingCart className="w-6 h-6" />
+          <span className="text-[10px] font-medium">Carrinho</span>
+          {cartCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-500 px-0.5 text-[10px] font-bold text-white">
+              {cartCount}
+            </span>
+          )}
+        </button>
 
         <button 
           onClick={() => setActiveTab('orders')}
@@ -1542,8 +1256,9 @@ export default function CustomerMenu({
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => window.open(`https://wa.me/${profile.phone.replace(/\D/g, '')}`, '_blank')}
-        className="fixed bottom-24 right-6 z-50 bg-green-500 text-white p-4 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-colors"
+        aria-label="Falar no WhatsApp"
+        onClick={() => window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank')}
+        className={`fixed right-6 z-40 ${cartCount > 0 && activeTab === 'menu' ? 'bottom-40 md:bottom-28' : 'bottom-24 md:bottom-6'} bg-green-500 text-white p-4 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-colors`}
       >
         <MessageCircle className="w-6 h-6" />
         <span className="absolute -top-1 -right-1 flex h-3 w-3">

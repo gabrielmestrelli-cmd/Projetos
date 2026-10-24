@@ -6,7 +6,7 @@ Guia para o Claude Code (e qualquer IA) trabalhar neste repositório. **Descreve
 
 App web de cardápio digital e pedidos da **Lev & Fit**, marmitas congeladas saudáveis da Grande Florianópolis.
 
-- **Cardápio do cliente (`/#/`)** — `src/components/CustomerMenu.tsx`: perfil estilo Instagram, stories/promoções, categorias, detalhes do prato, carrinho com descontos progressivos, checkout que abre o WhatsApp e grava o pedido no Supabase. Aba "Meus pedidos" identifica o cliente pelo telefone.
+- **Cardápio do cliente (`/#/`)** — `src/components/CustomerMenu.tsx`: perfil estilo Instagram, promoções, categorias, detalhes do prato (opção com/sem lactose nas marmitas, com/sem glúten nas coxinhas), **um único carrinho** (gaveta de baixo no celular, lateral no computador) salvo no navegador, checkout com entrega/retirada, endereço, taxa, pagamento e observações. Ao enviar, grava o pedido no Supabase e abre o WhatsApp da loja com a mensagem pronta. Aba "Meus pedidos" identifica o cliente pelo telefone.
 - **Painel admin (`/#/admin`)** — `src/components/AdminPanel.tsx`: pedidos (Pendente → Preparando → Entregue / Cancelado), produtos, categorias, depoimentos, promoções, perfil da loja, QR Code de mesa. Toca som de caixa registradora em pedido novo.
 
 ## 2. Stack
@@ -28,6 +28,8 @@ App web de cardápio digital e pedidos da **Lev & Fit**, marmitas congeladas sau
 
 Depois de qualquer alteração, rode `npm run lint` e `npm run build`.
 
+O painel admin é carregado sob demanda (`React.lazy`), e as bibliotecas ficam em arquivos separados (`manualChunks` no `vite.config.ts`).
+
 ## 4. Estrutura
 
 ```text
@@ -40,6 +42,9 @@ src/
     AdminPanel.tsx      # painel admin
   lib/
     supabase.ts         # cliente Supabase
+    pricing.ts          # REGRAS DE DESCONTO e total do carrinho (summarizeCart)
+    phone.ts            # máscara, validação e link do WhatsApp
+    id.ts               # newId() (UUID com plano B fora de https)
     sound.ts            # som de caixa registradora (Web Audio, sem arquivo)
   constants.ts          # cardápio/perfil iniciais (fallback se o banco estiver vazio)
   types.ts              # tipos (Order, Product, Category, ...)
@@ -47,7 +52,18 @@ src/
 supabase/seguranca.sql  # regras RLS + função is_admin + pedidos_do_cliente
 ```
 
-## 5. Dados e segurança
+## 5. Regras de negócio
+
+- **Descontos** ficam só em `src/lib/pricing.ts` (`PRICING`):
+  - 10+ marmitas → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
+  - coxinhas: cada 3 saem por R$ 24.
+  - Marmita = categoria `marmitas` ou id `mar-*`; coxinha = categoria `coxinhas` ou id `cox-*`.
+- **Taxa de entrega** = `profile.deliveryFee` (editável no admin), só quando o cliente escolhe Entrega. Se for 0, aparece "a combinar".
+- **Número do pedido** é gerado pelo banco (`criar_pedido`, sequência a partir de #1001). Se a função não existir, o app grava direto e usa os 6 primeiros caracteres do id.
+- **Telefones** são gravados só com números e sem o 55 (`normalizePhone`). Use `whatsappLink()` para qualquer link de WhatsApp.
+- Nunca montar texto de URL na mão: sempre `encodeURIComponent` (o `&` de "Lev & Fit" quebrava a mensagem).
+
+## 6. Dados e segurança
 
 Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`), `testimonials`, `promotions`, `orders`, `admins`.
 
@@ -55,13 +71,17 @@ Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`),
 - **Admin** entra com e-mail e senha pelo **Supabase Auth**. Só quem está na tabela `admins` é admin (`is_admin()`). Nunca volte a usar senha escrita no código.
 - **RLS** (ver `supabase/seguranca.sql`):
   - cardápio: leitura pública, escrita só admin;
-  - `orders`: qualquer um pode **criar** pedido com `status = 'pending'`; só admin lê/altera;
+  - `orders`: qualquer um pode **criar** pedido (pela função `criar_pedido`, que força `status = 'pending'`); só admin lê/altera;
   - cliente vê os próprios pedidos pela função `pedidos_do_cliente(telefone)`.
+- `store_profile` guarda também `bio`, `is_open`, `stats` (publicações/seguidores) e `profile_picture`.
+- `orders` guarda também `delivery_type`, `address`, `delivery_fee` e `notes`.
+- O app salva cada tabela em **uma** requisição (`upsert` em lote) e mostra aviso se der erro. Não engolir erros do Supabase: ele devolve `{ error }` em vez de lançar exceção.
+- Fotos enviadas no admin são reduzidas para 900px / JPEG 80% antes de salvar.
 - Pedidos novos chegam ao admin em tempo real via `supabase.channel` (Realtime) na tabela `orders`.
 - **Nunca** colocar a chave `service_role` ou chaves de IA no frontend (tudo com `VITE_` ou `define` vai parar no site). Recursos que precisam de chave secreta devem virar Supabase Edge Function.
 - A geração de imagens com Gemini está **desativada** por esse motivo.
 
-## 6. Variáveis de ambiente (`.env`)
+## 7. Variáveis de ambiente (`.env`)
 
 ```
 VITE_SUPABASE_URL=...

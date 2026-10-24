@@ -4,14 +4,17 @@
  */
 
 import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import CustomerMenu from './components/CustomerMenu';
-import AdminPanel from './components/AdminPanel';
+// O painel só é baixado por quem abre /admin (o cardápio fica mais leve)
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } from './constants';
 import { Leaf, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { normalizePhone } from './lib/phone';
+import { toast } from 'sonner';
 
 export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -115,7 +118,11 @@ export default function App() {
             phone: profData.phone || prev.phone,
             address: profData.address || prev.address,
             instagram: profData.instagram_url || prev.instagram,
-            deliveryFee: Number(profData.delivery_fee) || prev.deliveryFee
+            deliveryFee: profData.delivery_fee != null ? Number(profData.delivery_fee) : prev.deliveryFee,
+            bio: profData.bio ?? prev.bio,
+            isOpen: profData.is_open ?? prev.isOpen,
+            stats: profData.stats ? { ...prev.stats, ...profData.stats } : prev.stats,
+            profilePicture: profData.profile_picture ?? prev.profilePicture,
           }));
         }
 
@@ -220,6 +227,10 @@ export default function App() {
       paymentMethod: o.payment_method,
       status: o.status,
       createdAt: o.created_at,
+      deliveryType: o.delivery_type || undefined,
+      address: o.address || undefined,
+      deliveryFee: o.delivery_fee != null ? Number(o.delivery_fee) : undefined,
+      notes: o.notes || undefined,
     });
 
     const fetchOrders = async () => {
@@ -270,112 +281,119 @@ export default function App() {
       profile: newProfile || profile
     }));
 
-    // Sync with Supabase
-    try {
-      // Sync Categories
-      for (const cat of newCategories) {
-        await supabase.from('categories').upsert({
-          id: cat.id,
-          name: cat.name,
-          icon: cat.icon,
-          emoji: cat.emoji
-        });
-      }
+    // Salva no Supabase em lote (uma requisição por tabela)
+    const results = await Promise.all([
+      supabase.from('categories').upsert(newCategories.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        icon: cat.icon,
+        emoji: cat.emoji,
+        image_url: cat.image || null,
+      }))),
+      supabase.from('products').upsert(newProducts.map(prod => ({
+        id: prod.id,
+        name: prod.name,
+        description: prod.description,
+        price: prod.price,
+        category_id: prod.categoryId,
+        image_url: prod.image,
+        is_active: prod.available,
+        tags: prod.tags || [],
+      }))),
+      newProfile ? supabase.from('store_profile').upsert({
+        id: 1,
+        name: newProfile.name,
+        description: newProfile.description,
+        phone: newProfile.phone,
+        address: newProfile.address,
+        instagram_url: newProfile.instagram,
+        delivery_fee: newProfile.deliveryFee ?? 0,
+        bio: newProfile.bio,
+        is_open: newProfile.isOpen,
+        stats: newProfile.stats,
+        profile_picture: newProfile.profilePicture || null,
+      }) : null,
+      newTestimonials ? supabase.from('testimonials').upsert(newTestimonials.map(t => ({
+        id: t.id,
+        name: t.name,
+        comment: t.comment,
+        rating: t.rating,
+        avatar_url: t.avatar,
+        created_at: t.createdAt,
+      }))) : null,
+      newPromotions ? supabase.from('promotions').upsert(newPromotions.map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        image_url: p.image,
+        is_active: p.active,
+        created_at: p.createdAt,
+      }))) : null,
+    ]);
 
-      // Sync Products
-      for (const prod of newProducts) {
-        await supabase.from('products').upsert({
-          id: prod.id,
-          name: prod.name,
-          description: prod.description,
-          price: prod.price,
-          category_id: prod.categoryId,
-          image_url: prod.image,
-          is_active: prod.available,
-          tags: prod.tags
-        });
-      }
-
-      // Sync Profile
-      if (newProfile) {
-        await supabase.from('store_profile').upsert({
-          id: 1, // Assuming single profile
-          name: newProfile.name,
-          description: newProfile.description,
-          phone: newProfile.phone,
-          address: newProfile.address,
-          instagram_url: newProfile.instagram,
-          delivery_fee: newProfile.deliveryFee
-        });
-      }
-
-      // Sync Testimonials
-      if (newTestimonials) {
-        for (const t of newTestimonials) {
-          await supabase.from('testimonials').upsert({
-            id: t.id,
-            name: t.name,
-            comment: t.comment,
-            rating: t.rating,
-            avatar_url: t.avatar,
-            created_at: t.createdAt
-          });
-        }
-      }
-
-      // Sync Promotions
-      if (newPromotions) {
-        for (const p of newPromotions) {
-          await supabase.from('promotions').upsert({
-            id: p.id,
-            title: p.title,
-            description: p.description,
-            image_url: p.image,
-            is_active: p.active,
-            created_at: p.createdAt
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Supabase sync error:', err);
+    const failed = results.find(r => r && r.error);
+    if (failed?.error) {
+      console.error('Supabase sync error:', failed.error);
+      toast.error('Não foi possível salvar no banco', {
+        description: failed.error.message.includes('row-level security')
+          ? 'Sua conta não tem permissão. Entre de novo no painel.'
+          : failed.error.message,
+      });
+      return false;
     }
+    return true;
   };
 
-  const addOrder = async (order: Order) => {
-    // Generate a simple 4-digit order number
-    const lastOrderNumber = localStorage.getItem('last_order_number') || '1000';
-    const nextOrderNumber = (parseInt(lastOrderNumber) + 1).toString();
-    localStorage.setItem('last_order_number', nextOrderNumber);
-    
-    const orderWithNumber = { ...order, orderNumber: nextOrderNumber };
-    setOrders(prev => [orderWithNumber, ...prev]);
+  /** Grava o pedido e devolve o número dele (#1001...). */
+  const addOrder = async (order: Order): Promise<string> => {
+    const row = {
+      id: order.id,
+      customer_name: order.customerName,
+      customer_phone: normalizePhone(order.customerPhone),
+      items: order.items,
+      total_price: order.total,
+      discount: order.discount,
+      payment_method: order.paymentMethod,
+      delivery_type: order.deliveryType,
+      address: order.address,
+      delivery_fee: order.deliveryFee ?? 0,
+      notes: order.notes,
+    };
 
-    // Save to Supabase (Background)
-    try {
-      await supabase
-        .from('orders')
-        .insert([
-          {
-            id: orderWithNumber.id,
-            order_number: orderWithNumber.orderNumber,
-            customer_name: orderWithNumber.customerName,
-            customer_phone: orderWithNumber.customerPhone,
-            items: orderWithNumber.items,
-            total_price: orderWithNumber.total,
-            discount: orderWithNumber.discount,
-            payment_method: orderWithNumber.paymentMethod,
-            status: orderWithNumber.status,
-            created_at: orderWithNumber.createdAt,
-          }
-        ]);
-    } catch (err) {
-      console.error('Supabase save error:', err);
+    let orderNumber: string | null = null;
+
+    // 1º: função do banco que gera número único
+    const { data, error } = await supabase.rpc('criar_pedido', { p: row });
+    if (!error && data) {
+      orderNumber = String(data);
+    } else {
+      console.warn('criar_pedido indisponível, usando insert direto:', error?.message);
+      // 2º: insert simples (funciona mesmo antes de rodar o SQL novo)
+      const fallbackNumber = order.id.slice(0, 6).toUpperCase();
+      const { error: insertError } = await supabase.from('orders').insert([{
+        id: row.id,
+        order_number: fallbackNumber,
+        customer_name: row.customer_name,
+        customer_phone: row.customer_phone,
+        items: row.items,
+        total_price: row.total_price,
+        discount: row.discount,
+        payment_method: row.payment_method,
+        status: 'pending',
+        created_at: order.createdAt,
+      }]);
+      if (insertError) console.error('Supabase save error:', insertError);
+      orderNumber = fallbackNumber;
     }
+
+    setOrders(prev => [{ ...order, orderNumber }, ...prev]);
+    return orderNumber;
   };
 
   const handleLogin = (phone: string) => {
-    setUserPhone(phone);
-    localStorage.setItem('user_phone', phone);
+    const clean = normalizePhone(phone);
+    setUserPhone(clean);
+    localStorage.setItem('user_phone', clean);
   };
 
   const handleLogout = () => {
@@ -387,13 +405,10 @@ export default function App() {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
 
     // Update Supabase
-    try {
-      await supabase
-        .from('orders')
-        .update({ status })
-        .eq('id', orderId);
-    } catch (err) {
-      console.error('Supabase update error:', err);
+    const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+    if (error) {
+      console.error('Supabase update error:', error);
+      toast.error('Não foi possível mudar o status do pedido', { description: error.message });
     }
   };
 
@@ -438,6 +453,7 @@ export default function App() {
             <Route 
               path="/admin/*" 
               element={
+                <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center text-slate-400">Carregando painel...</div>}>
                 <AdminPanel 
                   categories={categories} 
                   products={products} 
@@ -452,6 +468,7 @@ export default function App() {
                   onAdminLogin={adminLogin}
                   onAdminLogout={adminLogout}
                 />
+                </Suspense>
               } 
             />
           </Routes>

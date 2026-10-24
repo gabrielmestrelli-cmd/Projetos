@@ -41,6 +41,10 @@ export interface Order {
   paymentMethod: 'pix' | 'cartao-link' | 'dinheiro';
   status: OrderStatus;
   createdAt: string;
+  deliveryType?: 'entrega' | 'retirada';
+  address?: string;
+  deliveryFee?: number;
+  notes?: string;
 }
 
 export interface Testimonial {
