@@ -15,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Loader2, MessageCircle, LogOut, Volume2, Bike, Store, MapPin, StickyNote, RefreshCw, Search, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playCashRegister, preloadCashRegister } from '../lib/sound';
 import { newId } from '../lib/id';
@@ -24,6 +23,8 @@ import { newId } from '../lib/id';
 const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL as string | undefined) || 'bielmaestrelli@hotmail.com';
 import { whatsappLink, maskPhone } from '../lib/phone';
 import { formatBRL } from '../lib/pricing';
+import { DEFAULT_DELIVERY, feeFor, geocode, formatKm } from '../lib/delivery';
+import { DeliverySettings } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface AdminPanelProps {
@@ -66,7 +67,6 @@ export default function AdminPanel({
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isTestimonialDialogOpen, setIsTestimonialDialogOpen] = useState(false);
   const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
-  const [qrTableNumber, setQrTableNumber] = useState('1');
 
   // Reduz a foto para no máximo 900px e JPEG ~80%: fica leve pro banco e pro celular do cliente
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
@@ -153,6 +153,7 @@ export default function AdminPanel({
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     const newOrder = orders[0];
@@ -366,36 +367,53 @@ export default function AdminPanel({
     setTestimonialForm({ name: '', comment: '', rating: 5, avatar: '' });
   };
 
-  const handleSavePromotion = () => {
-    if (!promotionForm.title || !promotionForm.description) {
-      toast.error('Preencha o título e a descrição da promoção');
+  const handleSavePromotion = async () => {
+    if (!promotionForm.title?.trim()) {
+      toast.error('Coloque o título');
       return;
     }
-    
-    let newPromotions: Promotion[];
-    if (editingPromotion) {
-      newPromotions = promotions.map(p => p.id === editingPromotion.id ? { ...editingPromotion, ...promotionForm } as Promotion : p);
-      toast.success('Promoção atualizada');
-    } else {
-      const newP: Promotion = { 
-        id: newId(), 
-        active: true,
-        createdAt: new Date().toISOString(),
-        ...promotionForm as Promotion 
-      };
-      newPromotions = [...promotions, newP];
-      toast.success('Promoção adicionada');
+    if (!promotionForm.image) {
+      toast.error('Escolha uma foto para o story');
+      return;
     }
-    
-    onUpdateMenu(categories, products, testimonials, newPromotions);
+    const clean = { ...promotionForm, title: promotionForm.title.trim(), description: (promotionForm.description || '').trim() };
+    const newPromotions: Promotion[] = editingPromotion
+      ? promotions.map(p => p.id === editingPromotion.id ? { ...editingPromotion, ...clean } as Promotion : p)
+      : [...promotions, { id: newId(), active: true, createdAt: new Date().toISOString(), ...clean } as Promotion];
+    const ok = await onUpdateMenu(categories, products, testimonials, newPromotions);
+    if (!ok) return;
+    toast.success(editingPromotion ? 'Story atualizado' : 'Story criado');
     setIsPromotionDialogOpen(false);
     setEditingPromotion(null);
     setPromotionForm({ title: '', description: '', image: '' });
   };
 
-  const handleSaveProfile = () => {
-    onUpdateMenu(categories, products, testimonials, promotions, profileForm);
-    toast.success('Perfil atualizado com sucesso!');
+  const togglePromotion = async (promo: Promotion, active: boolean) => {
+    const ok = await onUpdateMenu(categories, products, testimonials, promotions.map(p => p.id === promo.id ? { ...p, active } : p));
+    if (ok) toast.success(active ? 'Story publicado' : 'Story escondido');
+  };
+
+  const handleSaveProfile = async () => {
+    const ok = await onUpdateMenu(categories, products, testimonials, promotions, profileForm);
+    if (ok) toast.success('Perfil salvo');
+  };
+
+  const delivery: DeliverySettings = profileForm.delivery ?? { ...DEFAULT_DELIVERY, baseFee: profileForm.deliveryFee || 0 };
+  const setDelivery = (patch: Partial<DeliverySettings>) =>
+    setProfileForm(f => {
+      const cur = f.delivery ?? { ...DEFAULT_DELIVERY, baseFee: f.deliveryFee || 0 };
+      const next = { ...cur, ...patch };
+      return { ...f, delivery: next, deliveryFee: next.mode === 'fixed' ? next.baseFee : f.deliveryFee };
+    });
+  const locateOrigin = async () => {
+    const label = (delivery.originLabel || profileForm.address || '').trim();
+    if (!label) { toast.error('Escreva o endereço de onde saem as entregas'); return; }
+    setLocating(true);
+    const point = await geocode({ free: label }).catch(() => null);
+    setLocating(false);
+    if (!point) { toast.error('Não achei esse endereço no mapa', { description: 'Tente "Rua, número, bairro, cidade".' }); return; }
+    setDelivery({ originLabel: label, originLat: point.lat, originLng: point.lng });
+    toast.success('Ponto de saída encontrado. Confira no mapa e salve.');
   };
 
   const handleDeleteTestimonial = async (id: string) => {
@@ -450,7 +468,7 @@ export default function AdminPanel({
 
       <Tabs defaultValue="orders" className="w-full min-w-0" onValueChange={setActiveTab}>
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="flex w-max sm:grid sm:w-full sm:grid-cols-7 lg:w-[900px]">
+          <TabsList className="flex w-max sm:grid sm:w-full sm:grid-cols-6 lg:w-[900px]">
             <TabsTrigger value="orders" className="flex items-center gap-2 min-w-[100px] sm:min-w-0 relative">
               <ClipboardList className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Pedidos</span>
@@ -466,7 +484,7 @@ export default function AdminPanel({
             </TabsTrigger>
             <TabsTrigger value="categories" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <LayoutGrid className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Marmitas</span>
+              <span className="text-xs sm:text-sm">Categorias</span>
             </TabsTrigger>
             <TabsTrigger value="profile" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <User className="h-4 w-4" />
@@ -474,15 +492,11 @@ export default function AdminPanel({
             </TabsTrigger>
             <TabsTrigger value="promotions" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <Star className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Promoções</span>
+              <span className="text-xs sm:text-sm">Stories</span>
             </TabsTrigger>
             <TabsTrigger value="testimonials" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <User className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Feedback</span>
-            </TabsTrigger>
-            <TabsTrigger value="qrcode" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
-              <QrCode className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">QR Code</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -523,14 +537,6 @@ export default function AdminPanel({
                     <Input 
                       value={profileForm.address || ''} 
                       onChange={(e) => setProfileForm({...profileForm, address: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Taxa de Entrega (R$)</Label>
-                    <Input 
-                      type="number"
-                      value={profileForm.deliveryFee || 0} 
-                      onChange={(e) => setProfileForm({...profileForm, deliveryFee: parseFloat(e.target.value)})}
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-2">
@@ -593,6 +599,7 @@ export default function AdminPanel({
                       <img src="/perfil.jpg" alt="Logo padrão" className="w-full h-full object-cover" />
                     )}
                   </div>
+
                   <div className="flex-1 space-y-2">
                     <Input 
                       type="file" 
@@ -602,6 +609,84 @@ export default function AdminPanel({
                     <p className="text-xs text-slate-500">Recomendado: 500x500px</p>
                   </div>
                 </div>
+              </div>
+              <div className="space-y-4 rounded-2xl border p-4">
+                <div>
+                  <h4 className="font-semibold">Entrega</h4>
+                  <p className="text-sm text-slate-500">Escolha se a taxa é fixa ou calculada pela distância até o cliente.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {([['fixed', 'Taxa fixa'], ['per_km', 'Por km']] as const).map(([m, label]) => (
+                    <Button key={m} type="button" variant={delivery.mode === m ? 'default' : 'outline'} className={delivery.mode === m ? 'bg-green-600 hover:bg-green-700' : ''} onClick={() => setDelivery({ mode: m })}>
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="dl-base" className="text-xs">{delivery.mode === 'fixed' ? 'Taxa (R$)' : 'Saída (R$)'}</Label>
+                    <Input id="dl-base" type="number" inputMode="decimal" step="0.5" min="0" value={delivery.baseFee} onChange={e => setDelivery({ baseFee: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                  </div>
+                  {delivery.mode === 'per_km' && (
+                    <>
+                      <div className="space-y-1">
+                        <Label htmlFor="dl-perkm" className="text-xs">R$ por km</Label>
+                        <Input id="dl-perkm" type="number" inputMode="decimal" step="0.1" min="0" value={delivery.perKm} onChange={e => setDelivery({ perKm: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="dl-incl" className="text-xs">Km inclusos</Label>
+                        <Input id="dl-incl" type="number" inputMode="decimal" step="0.5" min="0" value={delivery.includedKm} onChange={e => setDelivery({ includedKm: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="dl-max" className="text-xs">Atende até (km)</Label>
+                        <Input id="dl-max" type="number" inputMode="decimal" step="1" min="0" value={delivery.maxKm} onChange={e => setDelivery({ maxKm: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-1">
+                    <Label htmlFor="dl-free" className="text-xs">Grátis acima de (R$)</Label>
+                    <Input id="dl-free" type="number" inputMode="decimal" step="10" min="0" value={delivery.freeAbove} onChange={e => setDelivery({ freeAbove: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Deixe 0 em "Grátis acima de" ou "Atende até" para não usar. Na taxa fixa, 0 vira "a combinar".</p>
+
+                {delivery.mode === 'per_km' && (
+                  <>
+                    <div className="space-y-1">
+                      <Label htmlFor="dl-origin" className="text-xs">De onde saem as entregas</Label>
+                      <div className="flex gap-2">
+                        <Input id="dl-origin" placeholder="Rua, número, bairro, cidade" value={delivery.originLabel ?? profileForm.address ?? ''} onChange={e => setDelivery({ originLabel: e.target.value, originLat: undefined, originLng: undefined })} />
+                        <Button type="button" variant="outline" onClick={locateOrigin} disabled={locating}>
+                          {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                          <span className="ml-1">Localizar</span>
+                        </Button>
+                      </div>
+                      {delivery.originLat != null && delivery.originLng != null ? (
+                        <a className="text-xs text-green-700 underline" target="_blank" rel="noreferrer" href={`https://www.openstreetmap.org/?mlat=${delivery.originLat}&mlon=${delivery.originLng}#map=17/${delivery.originLat}/${delivery.originLng}`}>
+                          Ponto encontrado. Ver no mapa
+                        </a>
+                      ) : (
+                        <p className="text-xs text-amber-700">Clique em Localizar antes de salvar. Sem o ponto de saída, a entrega fica "a combinar".</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="mb-2 text-xs font-semibold text-slate-500">Como fica a taxa</p>
+                      <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                        {[2, 5, 10, 15].map(km => {
+                          const r = feeFor({ ...delivery, freeAbove: 0 }, km, 0);
+                          return (
+                            <div key={km} className="rounded-lg bg-white p-2">
+                              <div className="text-xs text-slate-400">{formatKm(km)}</div>
+                              <div className="font-semibold tabular-nums">{r.outOfRange ? 'não atende' : formatBRL(r.fee)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
             <CardFooter className="bg-slate-50/50 border-t py-4 flex justify-end">
@@ -955,66 +1040,97 @@ export default function AdminPanel({
         </TabsContent>
 
         {/* Promotions Tab */}
-        <TabsContent value="promotions" className="mt-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Gerenciar Promoções</h3>
-            <Dialog open={isPromotionDialogOpen} onOpenChange={setIsPromotionDialogOpen}>
-              <DialogTrigger render={
-                <Button className="bg-green-600 hover:bg-green-700" onClick={() => {
-                  setEditingPromotion(null);
-                  setPromotionForm({ title: '', description: '', image: '' });
-                }}>
-                  <Plus className="mr-2 h-4 w-4" /> Nova Promoção
-                </Button>
-              } />
-              <DialogContent>
-                <DialogHeader><DialogTitle>Promoção</DialogTitle></DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="promo-title">Título</Label>
-                    <Input id="promo-title" value={promotionForm.title} onChange={(e) => setPromotionForm({...promotionForm, title: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="promo-desc">Descrição</Label>
-                    <Textarea id="promo-desc" value={promotionForm.description} onChange={(e) => setPromotionForm({...promotionForm, description: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="promo-img">URL da Imagem</Label>
-                    <div className="flex gap-2">
-                      <Input id="promo-img" value={promotionForm.image} onChange={(e) => setPromotionForm({...promotionForm, image: e.target.value})} />
-                      <div className="relative">
-                        <Input 
-                          type="file" 
-                          accept="image/*" 
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full" 
-                          onChange={(e) => handleImageUpload(e, (base64) => setPromotionForm({...promotionForm, image: base64}))}
-                        />
-                        <Button type="button" variant="outline" size="sm">Upload</Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsPromotionDialogOpen(false)}>Cancelar</Button>
-                  <Button className="bg-green-600 hover:bg-green-700" onClick={handleSavePromotion}>Salvar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+        <TabsContent value="promotions" className="mt-6 min-w-0 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Stories e ofertas</h3>
+              <p className="text-sm text-slate-500">Aparecem como stories no topo do cardápio. Marque como lançamento para ganhar o destaque grande.</p>
+            </div>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={() => { setEditingPromotion(null); setPromotionForm({ title: '', description: '', image: '', isLaunch: false, ctaLabel: '' }); setIsPromotionDialogOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" /> Novo story
+            </Button>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {promotions.map(p => (
-              <Card key={p.id}>
-                <CardHeader>
-                  <CardTitle className="text-sm">{p.title}</CardTitle>
-                  <CardDescription className="text-xs">{p.description}</CardDescription>
-                </CardHeader>
-                <CardFooter className="justify-end gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => { setEditingPromotion(p); setPromotionForm(p); setIsPromotionDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDeletePromotion(p.id)}><Trash2 className="h-4 w-4" /></Button>
-                </CardFooter>
-              </Card>
+
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+            {promotions.length === 0 && <p className="rounded-xl border border-dashed p-8 text-center text-slate-500">Nenhum story ainda.</p>}
+            {[...promotions].sort((x, y) => Number(!!y.isLaunch) - Number(!!x.isLaunch)).map(p => (
+              <div key={p.id} className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 ${p.active ? '' : 'opacity-60'}`}>
+                <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => { setEditingPromotion(p); setPromotionForm(p); setIsPromotionDialogOpen(true); }}>
+                  <span className={`shrink-0 rounded-full p-[2px] ${p.isLaunch ? 'bg-gradient-to-tr from-lime-400 to-emerald-700' : 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600'}`}>
+                    <img src={p.image} alt="" className="h-14 w-14 rounded-full border-2 border-white object-cover" referrerPolicy="no-referrer" />
+                  </span>
+                  <span className="min-w-0">
+                    {p.isLaunch && <span className="mb-0.5 inline-block rounded bg-lime-100 px-1.5 text-[10px] font-bold uppercase text-lime-800">Lançamento</span>}
+                    <span className="block truncate font-semibold">{p.title}</span>
+                    <span className="block truncate text-xs text-slate-500">{p.description}</span>
+                  </span>
+                </button>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setEditingPromotion(p); setPromotionForm(p); setIsPromotionDialogOpen(true); }}>
+                    <Edit className="mr-1 h-3.5 w-3.5" /> Editar
+                  </Button>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <Switch checked={p.active} onCheckedChange={(v) => togglePromotion(p, v)} aria-label="Publicar story" />
+                    {p.active ? 'No ar' : 'Escondido'}
+                  </label>
+                </div>
+              </div>
             ))}
           </div>
+
+          <Dialog open={isPromotionDialogOpen} onOpenChange={setIsPromotionDialogOpen}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[480px]">
+              <DialogHeader>
+                <DialogTitle>{editingPromotion ? 'Editar story' : 'Novo story'}</DialogTitle>
+                <DialogDescription>Use uma foto em pé (formato de story) para ficar melhor no celular.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-28 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
+                    {promotionForm.image ? <img src={promotionForm.image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <ImageOff className="h-6 w-6 text-slate-300" />}
+                  </div>
+                  <label className="relative inline-flex cursor-pointer">
+                    <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-slate-50">{promotionForm.image ? 'Trocar foto' : 'Escolher foto'}</span>
+                    <input type="file" accept="image/*" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => handleImageUpload(e, (base64) => setPromotionForm(f => ({ ...f, image: base64 })))} />
+                  </label>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="promo-title">Título</Label>
+                  <Input id="promo-title" value={promotionForm.title || ''} onChange={(e) => setPromotionForm(f => ({ ...f, title: e.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="promo-desc">Texto</Label>
+                  <Textarea id="promo-desc" rows={3} value={promotionForm.description || ''} onChange={(e) => setPromotionForm(f => ({ ...f, description: e.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="promo-cta">Texto do botão</Label>
+                  <Input id="promo-cta" placeholder={promotionForm.isLaunch ? 'Quero provar' : 'Aproveitar oferta'} value={promotionForm.ctaLabel || ''} onChange={(e) => setPromotionForm(f => ({ ...f, ctaLabel: e.target.value }))} />
+                </div>
+                <label className="flex items-center justify-between rounded-xl border p-3">
+                  <span>
+                    <span className="block text-sm font-medium">É um lançamento</span>
+                    <span className="block text-xs text-slate-500">Vira o primeiro story e ganha o banner grande no cardápio</span>
+                  </span>
+                  <Switch checked={!!promotionForm.isLaunch} onCheckedChange={(v) => setPromotionForm(f => ({ ...f, isLaunch: v }))} />
+                </label>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-slate-500">Usar link de imagem</summary>
+                  <Input className="mt-2" placeholder="https://..." value={promotionForm.image?.startsWith('data:') ? '' : (promotionForm.image || '')} onChange={(e) => setPromotionForm(f => ({ ...f, image: e.target.value }))} />
+                </details>
+              </div>
+              <DialogFooter className="gap-2 sm:justify-between">
+                {editingPromotion ? (
+                  <Button variant="ghost" className="text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => { handleDeletePromotion(editingPromotion.id); setIsPromotionDialogOpen(false); }}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Apagar
+                  </Button>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setIsPromotionDialogOpen(false)}>Cancelar</Button>
+                  <Button className="bg-green-600 hover:bg-green-700" onClick={handleSavePromotion}>Salvar</Button>
+                </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Testimonials Tab */}
@@ -1208,49 +1324,6 @@ export default function AdminPanel({
           </Card>
         </TabsContent>
 
-        {/* QR Code Tab */}
-        <TabsContent value="qrcode" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gerador de QR Code</CardTitle>
-              <CardDescription>Gere QR codes para as mesas do seu estabelecimento.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center gap-8 py-10">
-              <div className="flex items-center gap-4 w-full max-w-xs">
-                <Label htmlFor="table-num">Número da Mesa:</Label>
-                <Input 
-                  id="table-num" 
-                  type="number" 
-                  value={qrTableNumber} 
-                  onChange={(e) => setQrTableNumber(e.target.value)} 
-                />
-              </div>
-              
-              <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-xl border border-slate-100">
-                <div className="bg-green-600 text-white px-4 py-1 rounded-full text-sm font-bold mb-2">
-                  LOJA ONLINE
-                </div>
-                <QRCodeSVG 
-                  value={`${window.location.origin}`} 
-                  size={200}
-                  level="H"
-                  includeMargin={true}
-                />
-                <p className="text-xs text-slate-400 mt-2">Escaneie para ver o cardápio</p>
-              </div>
-
-              <div className="max-w-md text-center space-y-4">
-                <p className="text-sm text-slate-500">
-                  Imprima este QR Code e coloque na mesa {qrTableNumber}. 
-                  Quando o cliente escanear, o cardápio abrirá automaticamente.
-                </p>
-                <Button variant="outline" onClick={() => window.print()}>
-                  Imprimir QR Code
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

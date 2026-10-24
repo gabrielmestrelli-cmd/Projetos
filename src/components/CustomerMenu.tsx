@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList, Bike, Store, Loader2, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList, Bike, Store, Loader2, AlertCircle, Sparkles, MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
@@ -19,6 +19,9 @@ import { summarizeCart, isMarmita, isCoxinha, formatBRL, PRICING } from '../lib/
 import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/phone';
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
+import { DEFAULT_DELIVERY, feeFor, formatKm } from '../lib/delivery';
+import { StoryRing, StoryViewer, orderStories } from './Stories';
+import { AddressForm, QuoteBox, useDeliveryQuote, loadSavedAddress, saveAddress, formatAddress, isAddressComplete, AddressFields } from './DeliveryAddress';
 
 interface CustomerMenuProps {
   categories: Category[];
@@ -68,11 +71,13 @@ export default function CustomerMenu({
   const [deliveryType, setDeliveryType] = useState<'entrega' | 'retirada'>(
     (localStorage.getItem('delivery_type') as 'entrega' | 'retirada') || 'entrega'
   );
-  const [address, setAddress] = useState(localStorage.getItem('customer_address') || '');
+  const [addressFields, setAddressFields] = useState<AddressFields>(() => loadSavedAddress());
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [storyIndex, setStoryIndex] = useState<number | null>(null);
+  const [isFeeOpen, setIsFeeOpen] = useState(false);
   const [loginPhone, setLoginPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao-link' | 'dinheiro'>('pix');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -118,7 +123,21 @@ export default function CustomerMenu({
     (product.id.startsWith('cal-') && parseInt(product.id.split('-')[1]) > 2) ||
     (product.id.startsWith('mol-') && parseInt(product.id.split('-')[1]) > 2);
 
+  /** Peso escrito na descrição (ex.: "350g"), para o selo do prato */
+  const weightOf = (product: Product) => product.description.match(/\b(\d{2,4})\s?(g|kg|ml|l)\b/i)?.[0].replace(/\s/, '') ?? null;
+
   const hasOptions = (product: Product) => isCoxinha(product) || product.categoryId === 'marmitas';
+
+  const stories = useMemo(() => orderStories(promotions), [promotions]);
+  const launch = stories.find(st => st.isLaunch) || null;
+
+  const handleStoryCta = (story: Promotion) => {
+    // Se existir categoria de sucos e o story for de lançamento, abre ela
+    const juice = categories.find(c => /suco/i.test(c.name));
+    if (story.isLaunch && juice) setSelectedCategory(juice.id);
+    setActiveTab('menu');
+    setTimeout(() => document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
 
   const filteredProducts = useMemo(() => {
     const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -183,7 +202,14 @@ export default function CustomerMenu({
   };
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const deliveryFee = deliveryType === 'entrega' ? (profile.deliveryFee || 0) : 0;
+  const deliverySettings = profile.delivery ?? { ...DEFAULT_DELIVERY, mode: 'fixed' as const, baseFee: profile.deliveryFee || 0 };
+  const quote = useDeliveryQuote(deliverySettings, addressFields);
+  const goods = summarizeCart(cart, products, 0);
+  const goodsValue = goods.subtotal - goods.discount;
+  const feeResult = feeFor(deliverySettings, quote.status === 'ok' ? quote.km : null, goodsValue);
+  // Taxa "a combinar" quando é por km e ainda não deu pra calcular
+  const feeUnknown = deliverySettings.mode === 'per_km' && quote.status !== 'ok';
+  const deliveryFee = deliveryType === 'entrega' && !feeUnknown && !feeResult.outOfRange ? feeResult.fee : 0;
   const summary = summarizeCart(cart, products, deliveryFee);
   const { subtotal, discount, total, marmitaCount, coxinhaCount } = summary;
 
@@ -216,8 +242,16 @@ export default function CustomerMenu({
       toast.error('Informe um WhatsApp válido com DDD', { description: 'Exemplo: (48) 99999-8888' });
       return;
     }
-    if (deliveryType === 'entrega' && address.trim().length < 8) {
-      toast.error('Informe o endereço de entrega', { description: 'Rua, número e bairro' });
+    if (deliveryType === 'entrega' && !isAddressComplete(addressFields)) {
+      toast.error('Complete o endereço de entrega', { description: 'CEP, rua, número e cidade' });
+      return;
+    }
+    if (deliveryType === 'entrega' && feeResult.outOfRange) {
+      toast.error('Esse endereço fica fora da área de entrega', { description: 'Escolha retirar no local ou chame a gente no WhatsApp.' });
+      return;
+    }
+    if (deliveryType === 'entrega' && quote.status === 'loading') {
+      toast.info('Calculando a entrega, só um instante…');
       return;
     }
 
@@ -225,7 +259,7 @@ export default function CustomerMenu({
     try {
       localStorage.setItem('customer_name', customerName.trim());
       localStorage.setItem('delivery_type', deliveryType);
-      if (deliveryType === 'entrega') localStorage.setItem('customer_address', address.trim());
+      if (deliveryType === 'entrega') saveAddress(addressFields);
     } catch { /* ignore */ }
 
     const phone = normalizePhone(customerPhone);
@@ -242,8 +276,9 @@ export default function CustomerMenu({
       status: 'pending',
       createdAt: new Date().toISOString(),
       deliveryType,
-      address: deliveryType === 'entrega' ? address.trim() : undefined,
+      address: deliveryType === 'entrega' ? formatAddress(addressFields) : undefined,
       deliveryFee,
+      deliveryKm: deliveryType === 'entrega' && quote.status === 'ok' && quote.km !== null ? quote.km : undefined,
       notes: orderNotes.trim() || undefined,
     };
 
@@ -258,7 +293,7 @@ export default function CustomerMenu({
       `*📱 WhatsApp:* ${maskPhone(phone)}`,
       `*💳 Pagamento:* ${paymentLabel(paymentMethod)}`,
       deliveryType === 'entrega'
-        ? `*🛵 Entrega:* ${newOrder.address}`
+        ? `*🛵 Entrega:* ${newOrder.address}${newOrder.deliveryKm ? ` (${formatKm(newOrder.deliveryKm)})` : ''}`
         : '*🏠 Retirada no local*',
       line,
       '*🛒 Itens:*',
@@ -267,7 +302,7 @@ export default function CustomerMenu({
       `Subtotal: ${formatBRL(subtotal)}`,
       discount > 0 ? `Desconto: -${formatBRL(discount)}` : '',
       deliveryType === 'entrega'
-        ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : 'Taxa de entrega: a combinar')
+        ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : feeResult.free && !feeUnknown ? 'Entrega grátis' : 'Taxa de entrega: a combinar')
         : '',
       `*💰 TOTAL: ${formatBRL(total)}*`,
       newOrder.notes ? `\n*📝 Observações:* ${newOrder.notes}` : '',
@@ -381,7 +416,7 @@ export default function CustomerMenu({
             <Button variant={deliveryType === 'entrega' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'entrega' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('entrega')}>
               <Bike className="h-5 w-5" />
               <span className="text-xs font-bold">
-                Entrega {profile.deliveryFee ? `• ${formatBRL(profile.deliveryFee)}` : '• a combinar'}
+                Entrega{deliverySettings.mode === 'fixed' ? (deliverySettings.baseFee > 0 ? ` • ${formatBRL(deliverySettings.baseFee)}` : '') : ' • por km'}
               </span>
             </Button>
             <Button variant={deliveryType === 'retirada' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'retirada' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('retirada')}>
@@ -390,9 +425,9 @@ export default function CustomerMenu({
             </Button>
           </div>
           {deliveryType === 'entrega' ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="checkout-address" className="text-xs font-bold uppercase text-slate-500">Endereço de entrega</Label>
-              <Textarea id="checkout-address" autoComplete="street-address" rows={2} placeholder="Rua, número, bairro e cidade" className="rounded-xl border-none bg-slate-50" value={address} onChange={e => setAddress(e.target.value)} />
+            <div className="space-y-3">
+              <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="checkout" />
+              <QuoteBox settings={deliverySettings} quote={quote} orderValue={goodsValue} />
             </div>
           ) : profile.address ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">📍 {profile.address}</p>
@@ -430,7 +465,9 @@ export default function CustomerMenu({
           {deliveryType === 'entrega' && (
             <div className="flex justify-between text-slate-500">
               <span>Entrega</span>
-              <span className="tabular-nums">{deliveryFee > 0 ? formatBRL(deliveryFee) : 'a combinar'}</span>
+              <span className="tabular-nums">
+                {feeResult.outOfRange ? 'fora da área' : deliveryFee > 0 ? formatBRL(deliveryFee) : feeResult.free && !feeUnknown ? 'grátis' : 'a combinar'}
+              </span>
             </div>
           )}
           <div className="flex items-center justify-between pt-1 text-2xl font-black text-slate-900">
@@ -599,41 +636,52 @@ export default function CustomerMenu({
             exit={{ opacity: 0, y: -10 }}
             className="space-y-0 pb-24"
           >
-            {/* Status Indicator */}
-            <div className="px-4 mb-4 max-w-4xl mx-auto">
+            {/* Stories das ofertas */}
+            <div className="mx-auto max-w-4xl">
+              <StoryRing stories={stories} onOpen={setStoryIndex} />
+            </div>
+
+            {/* Status + calcular entrega */}
+            <div className="mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4">
               {profile.isOpen ? (
-                <span className="text-green-600 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+                <span className="flex items-center gap-1.5 font-bold text-green-600">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-green-600" />
                   Aberto agora
                 </span>
               ) : (
-                <span className="text-red-600 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-red-600" />
+                <span className="flex items-center gap-1.5 font-bold text-red-600">
+                  <span className="h-2 w-2 rounded-full bg-red-600" />
                   Fechado no momento
                 </span>
               )}
+              <button onClick={() => setIsFeeOpen(true)} className="flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Bike className="h-4 w-4 text-green-600" />
+                {deliverySettings.mode === 'fixed'
+                  ? (deliverySettings.baseFee > 0 ? `Entrega ${formatBRL(deliverySettings.baseFee)}` : 'Entrega a combinar')
+                  : 'Calcular entrega'}
+              </button>
             </div>
 
-            {/* iFood Style Banners (Instagram Highlights style) */}
-      {promotions.length > 0 && (
-        <div className="px-4 overflow-x-auto flex gap-3 scrollbar-hide py-2">
-          {promotions.filter(p => p.active).map((promo) => (
-            <div key={promo.id} className="min-w-[280px] h-32 relative rounded-2xl overflow-hidden shadow-sm flex-shrink-0">
-              <img 
-                src={promo.image} 
-                className="absolute inset-0 w-full h-full object-cover" 
-                alt={promo.title} 
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex flex-col justify-center p-4">
-                <Badge className="w-fit bg-red-500 text-white border-none mb-1 text-[10px]">OFERTA</Badge>
-                <h3 className="text-white font-bold text-lg leading-tight">{promo.title}</h3>
-                <p className="text-white/80 text-xs">{promo.description}</p>
+            {/* Destaque do lançamento */}
+            {launch && (
+              <div className="mx-auto mb-2 max-w-4xl px-4">
+                <button
+                  onClick={() => setStoryIndex(stories.findIndex(st => st.id === launch.id))}
+                  className="relative block h-44 w-full overflow-hidden rounded-3xl text-left shadow-md"
+                >
+                  <img src={launch.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-950/85 via-green-900/50 to-transparent" />
+                  <div className="relative flex h-full max-w-[75%] flex-col justify-center gap-1.5 p-5">
+                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-lime-400 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-950">
+                      <Sparkles className="h-3 w-3" /> Lançamento
+                    </span>
+                    <h3 className="text-2xl font-black leading-tight text-white" style={{ textWrap: 'balance' }}>{launch.title}</h3>
+                    {launch.description && <p className="line-clamp-2 text-sm text-white/85">{launch.description}</p>}
+                    <span className="mt-1 text-sm font-bold text-lime-300">{launch.ctaLabel || 'Quero provar'} →</span>
+                  </div>
+                </button>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
 
       {/* Stories Style Categories */}
       <div className="flex gap-4 overflow-x-auto py-6 scrollbar-hide px-4 border-b border-slate-100">
@@ -742,9 +790,9 @@ export default function CustomerMenu({
                         {product.name}
                         {product.ingredients && <Info className="w-3.5 h-3.5 text-slate-400" />}
                       </h3>
-                      {product.description.includes('500g') && (
+                      {weightOf(product) && (
                         <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-[10px] px-2 h-5 font-bold">
-                          ⚖️ 500g
+                          ⚖️ {weightOf(product)}
                         </Badge>
                       )}
                       <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
@@ -827,9 +875,9 @@ export default function CustomerMenu({
                     <Badge className="bg-black/60 backdrop-blur-sm text-white border-none text-[8px] px-1 h-4">
                       R$ {product.price.toFixed(0)}
                     </Badge>
-                    {product.description.includes('500g') && (
+                    {weightOf(product) && (
                       <Badge className="bg-slate-800/80 backdrop-blur-sm text-white border-none text-[8px] px-1 h-4 font-bold">
-                        500g
+                        {weightOf(product)}
                       </Badge>
                     )}
                     {isNew(product) && (
@@ -1006,6 +1054,30 @@ export default function CustomerMenu({
         </SheetContent>
       </Sheet>
 
+      {storyIndex !== null && stories.length > 0 && (
+        <StoryViewer stories={stories} startIndex={Math.max(0, storyIndex)} onClose={() => setStoryIndex(null)} onCta={handleStoryCta} />
+      )}
+
+      <Dialog open={isFeeOpen} onOpenChange={setIsFeeOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-green-600" /> Calcular entrega</DialogTitle>
+            <DialogDescription>
+              {deliverySettings.mode === 'per_km'
+                ? 'Coloque seu CEP e número para ver a distância e o valor.'
+                : 'Confira o valor da entrega para o seu endereço.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="calc" />
+            <QuoteBox settings={deliverySettings} quote={quote} orderValue={goodsValue} />
+            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => { saveAddress(addressFields); setDeliveryType('entrega'); setIsFeeOpen(false); }}>
+              Usar esse endereço no pedido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Product Detail Dialog */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => {
         if (!open) {
@@ -1031,9 +1103,9 @@ export default function CustomerMenu({
                       <Badge className="bg-green-600 text-white border-none">
                         {selectedProduct.type === 'pronta-entrega' ? 'Pronta Entrega' : 'Sob Encomenda'}
                       </Badge>
-                      {selectedProduct.description.includes('500g') && (
+                      {weightOf(selectedProduct) && (
                         <Badge className="bg-slate-800 text-white border-none">
-                          ⚖️ 500g
+                          ⚖️ {weightOf(selectedProduct)}
                         </Badge>
                       )}
                     </div>

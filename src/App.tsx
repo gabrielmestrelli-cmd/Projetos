@@ -14,6 +14,7 @@ import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PRO
 import { Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { normalizePhone } from './lib/phone';
+import { DEFAULT_DELIVERY } from './lib/delivery';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -42,15 +43,7 @@ export default function App() {
         return saved ? { ...ic, name: saved.name || ic.name } : ic;
       });
       
-      // Sync descriptions from INITIAL_PRODUCTS to ensure "500g" and other updates are applied
-      // while keeping user-modified fields like price or image if they were changed in admin
-      finalProducts = (parsed.products || INITIAL_PRODUCTS).map(p => {
-        const initial = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
-        if (initial && initial.description.includes('500g') && !p.description.includes('500g')) {
-          return { ...p, description: initial.description };
-        }
-        return p;
-      });
+      finalProducts = parsed.products || INITIAL_PRODUCTS;
 
       finalTestimonials = parsed.testimonials || INITIAL_TESTIMONIALS;
       finalPromotions = parsed.promotions || INITIAL_PROMOTIONS;
@@ -124,6 +117,7 @@ export default function App() {
             isOpen: profData.is_open ?? prev.isOpen,
             stats: profData.stats ? { ...prev.stats, ...profData.stats } : prev.stats,
             profilePicture: profData.profile_picture ?? prev.profilePicture,
+            delivery: profData.delivery ? { ...DEFAULT_DELIVERY, ...profData.delivery } : prev.delivery,
           }));
         }
 
@@ -149,7 +143,9 @@ export default function App() {
             description: p.description,
             image: p.image_url || '',
             active: p.is_active ?? true,
-            createdAt: p.created_at
+            createdAt: p.created_at,
+            isLaunch: !!p.is_launch,
+            ctaLabel: p.cta_label || undefined,
           })));
         }
 
@@ -232,6 +228,7 @@ export default function App() {
       address: o.address || undefined,
       deliveryFee: o.delivery_fee != null ? Number(o.delivery_fee) : undefined,
       notes: o.notes || undefined,
+      deliveryKm: o.delivery_km != null ? Number(o.delivery_km) : undefined,
     });
 
     const fetchOrders = async () => {
@@ -327,6 +324,7 @@ export default function App() {
         is_open: newProfile.isOpen,
         stats: newProfile.stats,
         profile_picture: newProfile.profilePicture || null,
+        delivery: newProfile.delivery ?? null,
       }) : null,
       testsToSave.length === 0 ? skip : supabase.from('testimonials').upsert(testsToSave.map(t => ({
         id: t.id,
@@ -343,6 +341,8 @@ export default function App() {
         image_url: p.image,
         is_active: p.active,
         created_at: p.createdAt,
+        is_launch: !!p.isLaunch,
+        cta_label: p.ctaLabel || null,
       }))),
     ]);
 
@@ -372,6 +372,7 @@ export default function App() {
       delivery_type: order.deliveryType,
       address: order.address,
       delivery_fee: order.deliveryFee ?? 0,
+      delivery_km: order.deliveryKm != null ? Math.round(order.deliveryKm * 10) / 10 : null,
       notes: order.notes,
     };
 

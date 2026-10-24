@@ -44,6 +44,8 @@ export interface Order {
   deliveryType?: 'entrega' | 'retirada';
   address?: string;
   deliveryFee?: number;
+  /** Distância calculada até o cliente, em km */
+  deliveryKm?: number;
   notes?: string;
 }
 
@@ -62,7 +64,30 @@ export interface Promotion {
   description: string;
   image: string;
   active: boolean;
+  /** Lançamento: aparece em destaque no topo e como primeiro story */
+  isLaunch?: boolean;
+  /** Texto do botão do story (ex.: "Quero provar") */
+  ctaLabel?: string;
   createdAt: string;
+}
+
+export interface DeliverySettings {
+  /** 'fixed' = taxa fixa; 'per_km' = calculada pela distância */
+  mode: 'fixed' | 'per_km';
+  /** Taxa fixa, ou valor de saída no modo por km */
+  baseFee: number;
+  /** R$ por km rodado além dos km inclusos */
+  perKm: number;
+  /** Km já inclusos na taxa de saída */
+  includedKm: number;
+  /** Distância máxima atendida (0 = sem limite) */
+  maxKm: number;
+  /** Entrega grátis a partir deste valor de pedido (0 = nunca) */
+  freeAbove: number;
+  /** Ponto de saída das entregas */
+  originLabel?: string;
+  originLat?: number;
+  originLng?: number;
 }
 
 export interface BusinessProfile {
@@ -73,6 +98,7 @@ export interface BusinessProfile {
   description?: string;
   address?: string;
   deliveryFee?: number;
+  delivery?: DeliverySettings;
   stats: {
     posts: number;
     followers: string;

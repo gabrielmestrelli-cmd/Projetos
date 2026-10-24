@@ -36,6 +36,11 @@ alter table public.orders add column if not exists delivery_type text;
 alter table public.orders add column if not exists address text;
 alter table public.orders add column if not exists delivery_fee numeric default 0;
 alter table public.orders add column if not exists notes text;
+alter table public.orders add column if not exists delivery_km numeric;
+
+alter table public.store_profile add column if not exists delivery jsonb;
+alter table public.promotions add column if not exists is_launch boolean default false;
+alter table public.promotions add column if not exists cta_label text;
 
 -- 2) Cardápio: qualquer um LÊ, só admin ESCREVE ---------------------------
 do $$

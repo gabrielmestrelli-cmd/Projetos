@@ -7,14 +7,14 @@ Guia para o Claude Code (e qualquer IA) trabalhar neste repositório. **Descreve
 App web de cardápio digital e pedidos da **Lev & Fit**, marmitas congeladas saudáveis da Grande Florianópolis.
 
 - **Cardápio do cliente (`/#/`)** — `src/components/CustomerMenu.tsx`: perfil estilo Instagram, promoções, categorias, detalhes do prato (opção com/sem lactose nas marmitas, com/sem glúten nas coxinhas), **um único carrinho** (gaveta de baixo no celular, lateral no computador) salvo no navegador, checkout com entrega/retirada, endereço, taxa, pagamento e observações. Ao enviar, grava o pedido no Supabase e abre o WhatsApp da loja com a mensagem pronta. Aba "Meus pedidos" identifica o cliente pelo telefone.
-- **Painel admin (`/#/admin`)** — `src/components/AdminPanel.tsx`: pedidos (Pendente → Preparando → Entregue / Cancelado), produtos, categorias, depoimentos, promoções, perfil da loja, QR Code de mesa. Toca som de caixa registradora em pedido novo.
+- **Painel admin (`/#/admin`)** — `src/components/AdminPanel.tsx`: pedidos (Pendente → Preparando → Entregue / Cancelado), produtos, categorias, depoimentos, promoções, perfil da loja e configuração da entrega. Toca som de caixa registradora em pedido novo.
 
 ## 2. Stack
 
 - React 19 + TypeScript, Vite 6, Tailwind CSS v4 (`@tailwindcss/vite`, `@import "tailwindcss"` em `src/index.css` — **não criar `tailwind.config.js`**)
 - Componentes shadcn em `components/ui/` (na **raiz**, não em `src/`), alias `@` = raiz do projeto
 - `react-router-dom` v7 com **HashRouter** (URLs com `#`)
-- `lucide-react`, `sonner`, `motion`, `qrcode.react`
+- `lucide-react`, `sonner`, `motion`
 - **Banco: só Supabase** (`src/lib/supabase.ts`). Não há Firebase, nem servidor Express, nem pasta `data/`.
 
 ## 3. Comandos
@@ -64,12 +64,19 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
   - 10+ marmitas → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
   - coxinhas: cada 3 saem por R$ 24.
   - Marmita = categoria `marmitas` ou id `mar-*`; coxinha = categoria `coxinhas` ou id `cox-*`.
-- **Taxa de entrega** = `profile.deliveryFee` (editável no admin), só quando o cliente escolhe Entrega. Se for 0, aparece "a combinar".
+- **Entrega** (`profile.delivery`, coluna `store_profile.delivery` jsonb, editável na aba Perfil):
+  - modo `fixed` (taxa fixa) ou `per_km` (saída + R$/km além dos km inclusos, arredondado para R$ 0,50; limite de km; grátis acima de um valor).
+  - Cálculo em `src/lib/delivery.ts`: CEP → ViaCEP/BrasilAPI; coordenadas → Nominatim (OpenStreetMap); distância de carro → OSRM (se falhar, linha reta × 1,35). Tudo gratuito e sem chave, chamado do navegador.
+  - O endereço do cliente é digitado em `components/DeliveryAddress.tsx` (CEP preenche rua/bairro/cidade) e fica salvo no navegador. Sem ponto de saída configurado ou endereço não achado → "a combinar".
+  - O pedido guarda `delivery_fee` e `delivery_km`.
+- **Stories** (`components/Stories.tsx`): as promoções ativas viram stories no topo do cardápio. `is_launch = true` coloca o story em primeiro e mostra o banner grande de lançamento (hoje: sucos).
 - **Número do pedido** é gerado pelo banco (`criar_pedido`, sequência a partir de #1001). Se a função não existir, o app grava direto e usa os 6 primeiros caracteres do id.
 - **Telefones** são gravados só com números e sem o 55 (`normalizePhone`). Use `whatsappLink()` para qualquer link de WhatsApp.
 - Nunca montar texto de URL na mão: sempre `encodeURIComponent` (o `&` de "Lev & Fit" quebrava a mensagem).
 
 ## 6. Dados e segurança
+
+- Categoria `marmitas` se chama **Tradicionais**; as marmitas têm 350g (o selo de peso do cardápio lê o peso escrito na descrição).
 
 Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`), `testimonials`, `promotions`, `orders`, `admins`.
 
@@ -98,6 +105,6 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 
 ## 8. Publicação
 
-- No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, hoje `racing-gust-kzxj11i`).
+- No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, veja na Vercel qual projeto tem o domínio).
 - O site é estático: `npm run build` gera `dist/`, que é enviado com `vercel deploy dist --prod` (precisa `vercel login`). As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.

@@ -118,8 +118,8 @@ const seed = [
   INITIAL_TESTIMONIALS.map(t => `  (${q(t.id)}, ${q(t.name)}, ${q(t.comment)}, ${q(t.rating)}, ${q(t.avatar)})`).join(',\n'),
   `on conflict (id) do nothing;`,
   '',
-  `insert into public.promotions (id, title, description, image_url, is_active) values`,
-  INITIAL_PROMOTIONS.map(pm => `  (${q(pm.id)}, ${q(pm.title)}, ${q(pm.description)}, ${q(pm.image)}, ${q(pm.active)})`).join(',\n'),
+  `insert into public.promotions (id, title, description, image_url, is_active, is_launch, cta_label) values`,
+  INITIAL_PROMOTIONS.map(pm => `  (${q(pm.id)}, ${q(pm.title)}, ${q(pm.description)}, ${q(pm.image)}, ${q(pm.active)}, ${q(!!pm.isLaunch)}, ${q(pm.ctaLabel)})`).join(',\n'),
   `on conflict (id) do nothing;`,
 ].join('\n');
 
