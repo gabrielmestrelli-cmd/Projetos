@@ -714,19 +714,23 @@ export default function CustomerMenu({
             </div>
 
       {/* Stories Style Categories */}
-      <div className="flex gap-4 overflow-x-auto py-6 scrollbar-hide px-4 border-b border-slate-100">
+      {/* Até 6 bolinhas cabem inteiras na tela do celular; com mais, a fileira rola */}
+      <div
+        className={`${categories.length + 1 <= 6 ? 'grid gap-1 px-2 sm:flex sm:gap-4 sm:px-4' : 'flex gap-3 overflow-x-auto px-4 scrollbar-hide'} py-5 sm:py-6 border-b border-slate-100`}
+        style={categories.length + 1 <= 6 ? { gridTemplateColumns: `repeat(${categories.length + 1}, minmax(0, 1fr))` } : undefined}
+      >
         <button
           onClick={() => setSelectedCategory('all')}
-          className="flex flex-col items-center gap-2 flex-shrink-0 group"
+          className="flex min-w-0 flex-col items-center gap-1.5 flex-shrink-0 group"
         >
-          <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
+          <div className={`w-[52px] h-[52px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
-              <div className={`h-full w-full rounded-full p-2 ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
+              <div className={`h-full w-full rounded-full p-1.5 sm:p-2 ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                 <CategoryArt id="all" />
               </div>
             </div>
           </div>
-          <span className={`text-[11px] mt-1 transition-all ${selectedCategory === 'all' ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
+          <span className={`w-full text-center text-[10px] sm:text-[11px] leading-tight transition-all ${selectedCategory === 'all' ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
             TODOS
           </span>
         </button>
@@ -736,13 +740,13 @@ export default function CustomerMenu({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className="flex flex-col items-center gap-2 flex-shrink-0 group"
+              className="flex min-w-0 flex-col items-center gap-1.5 flex-shrink-0 group"
             >
-              <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
+              <div className={`w-[52px] h-[52px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                     {CategoryArt({ id: cat.id, name: cat.name }) ? (
-                      <span className="block h-full w-full p-2"><CategoryArt id={cat.id} name={cat.name} /></span>
+                      <span className="block h-full w-full p-1.5 sm:p-2"><CategoryArt id={cat.id} name={cat.name} /></span>
                     ) : cat.image ? (
                       <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : cat.emoji ? (
@@ -753,7 +757,7 @@ export default function CustomerMenu({
                   </div>
                 </div>
               </div>
-              <span className={`text-[11px] mt-1 transition-all ${selectedCategory === cat.id ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
+              <span className={`w-full text-center text-[10px] sm:text-[11px] leading-tight transition-all ${selectedCategory === cat.id ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
                 {cat.name}
               </span>
             </button>
