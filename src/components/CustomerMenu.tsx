@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
 import { DEFAULT_DELIVERY, feeFor, formatKm, mapLink } from '../lib/delivery';
 import { StoryViewer, OffersCarousel, orderStories } from './Stories';
+import { CategoryArt } from './CategoryIcons';
 import { AddressForm, QuoteBox, useDeliveryQuote, loadSavedAddress, saveAddress, formatAddress, isAddressComplete, AddressFields } from './DeliveryAddress';
 
 interface CustomerMenuProps {
@@ -176,27 +177,6 @@ export default function CustomerMenu({
     () => [...testimonials].filter(t => t.comment?.trim()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
     [testimonials],
   );
-
-  // Capa das bolinhas de categoria: foto de um prato da própria categoria (as fotos reais primeiro)
-  const coverFor = (categoryId: string) => {
-    const list = products.filter(p => p.categoryId === categoryId && p.available && p.image);
-    return (list.find(p => p.image.startsWith('/produtos/')) || list[0])?.image || '';
-  };
-  // "Todos": mosaico com 4 fotos diferentes do cardápio
-  const allCover = useMemo(() => {
-    const seen = new Set<string>();
-    const pics: string[] = [];
-    for (const c of categories) {
-      const img = coverFor(c.id);
-      if (img && !seen.has(img)) { seen.add(img); pics.push(img); }
-    }
-    for (const p of products) {
-      if (pics.length >= 4) break;
-      if (p.available && p.image && !seen.has(p.image)) { seen.add(p.image); pics.push(p.image); }
-    }
-    return pics.slice(0, 4);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, categories]);
 
   const addToCart = (product: Product, quantity: number = 1, notes?: string) => {
     setCart(prev => {
@@ -687,10 +667,8 @@ export default function CustomerMenu({
         >
           <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
-              <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-full bg-white">
-                {allCover.map(src => (
-                  <img key={src} src={src} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                ))}
+              <div className={`h-full w-full rounded-full p-2 ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
+                <CategoryArt id="all" />
               </div>
             </div>
           </div>
@@ -709,8 +687,10 @@ export default function CustomerMenu({
               <div className={`w-16 h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
-                    {cat.image || coverFor(cat.id) ? (
-                      <img src={cat.image || coverFor(cat.id)} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    {CategoryArt({ id: cat.id, name: cat.name }) ? (
+                      <span className="block h-full w-full p-2"><CategoryArt id={cat.id} name={cat.name} /></span>
+                    ) : cat.image ? (
+                      <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : cat.emoji ? (
                       cat.emoji
                     ) : (
