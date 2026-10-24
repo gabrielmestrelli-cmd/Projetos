@@ -515,6 +515,35 @@ export default function CustomerMenu({
 
   return (
     <div className="min-h-screen bg-white pb-24">
+      {/* Endereço de entrega sempre à vista (como nos apps de delivery) */}
+      <button
+        type="button"
+        onClick={() => setIsFeeOpen(true)}
+        className="flex w-full items-center gap-3 border-b border-amber-100 bg-amber-50/70 px-4 py-2.5 text-left transition-colors hover:bg-amber-50 md:rounded-t-xl"
+      >
+        <MapPin className="h-5 w-5 shrink-0 text-slate-700" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-medium text-slate-500">Endereço de entrega</span>
+          <span className="block truncate text-sm font-bold text-slate-900">
+            {isAddressComplete(addressFields)
+              ? [addressFields.street, addressFields.number].filter(Boolean).join(', ') + (addressFields.neighborhood ? ` - ${addressFields.neighborhood}` : '')
+              : 'Será que entrega?'}
+          </span>
+        </span>
+        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-green-700 shadow-sm">
+          {!isAddressComplete(addressFields) && addressFields.lat == null
+            ? 'Calcular'
+            : quote.status === 'loading'
+              ? 'Calculando…'
+              : feeResult.outOfRange
+                ? 'Fora da área'
+                : quote.status === 'ok' && feeResult.fee > 0
+                  ? formatBRL(feeResult.fee)
+                  : deliverySettings.mode === 'fixed' && deliverySettings.baseFee > 0
+                    ? formatBRL(deliverySettings.baseFee)
+                    : 'A combinar'}
+        </span>
+      </button>
       {/* Instagram Style Header */}
       <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between md:hidden">
         <div className="flex items-center gap-2">

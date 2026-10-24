@@ -7,6 +7,7 @@ import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import CustomerMenu from './components/CustomerMenu';
+import { PromoBar } from './components/PromoBar';
 // O painel só é baixado por quem abre /admin (o cardápio fica mais leve)
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
@@ -462,6 +463,7 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-slate-50 font-sans">
+        <PromoBar />
         <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
             <div className="flex-1 md:flex-none flex justify-center md:justify-start">
