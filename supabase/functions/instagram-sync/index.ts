@@ -4,10 +4,9 @@
 //
 // O token fica na tabela instagram_config (só o servidor lê). O admin cola o token no painel.
 // Tokens do Instagram duram 60 dias; esta função renova o token toda semana sozinha.
-// Deploy: verify_jwt = false (não mexe em nada sensível; tem trava de 1 minuto entre execuções).
+// Chamada com a chave publishable (pública). Tem trava de 1 minuto entre execuções.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
-
+import postgres from 'npm:postgres@3.4.5';
 const GRAPH = 'https://graph.instagram.com/v21.0';
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -21,13 +20,21 @@ const milhar = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d)
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
-  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  // Conexão direta com o banco (a variável SUPABASE_DB_URL já vem em toda Edge Function)
+  const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { prepare: false, max: 1 });
+  try {
+    return await sync(req, sql);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+});
 
-  const { data: cfg } = await db.from('instagram_config').select('*').eq('id', 1).maybeSingle();
+async function sync(req: Request, sql: ReturnType<typeof postgres>) {
+  const [cfg] = await sql`select * from public.instagram_config where id = 1`;
   let token: string | undefined = cfg?.access_token || Deno.env.get('IG_ACCESS_TOKEN') || undefined;
   if (!token) return json({ ok: false, configured: false, message: 'Instagram ainda não conectado' });
 
-  const { data: prof } = await db.from('store_profile').select('stats, instagram_synced_at').eq('id', 1).maybeSingle();
+  const [prof] = await sql`select stats, instagram_synced_at from public.store_profile where id = 1`;
   const force = new URL(req.url).searchParams.get('force') === '1';
   if (!force && prof?.instagram_synced_at && Date.now() - new Date(prof.instagram_synced_at).getTime() < 60_000) {
     return json({ ok: true, skipped: true, message: 'Atualizado há menos de 1 minuto' });
@@ -39,14 +46,14 @@ Deno.serve(async req => {
     const r = await fetch(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${token}`).then(r => r.json()).catch(() => null);
     if (r?.access_token) {
       token = r.access_token;
-      await db.from('instagram_config').update({ access_token: token, token_refreshed_at: new Date().toISOString() }).eq('id', 1);
+      await sql`update public.instagram_config set access_token = ${token}, token_refreshed_at = now() where id = 1`;
     }
   }
 
   const me = await fetch(`${GRAPH}/me?fields=user_id,username,followers_count,follows_count,media_count&access_token=${token}`).then(r => r.json()).catch(() => null);
   if (!me || me.error) {
     const message = me?.error?.message || 'Não consegui falar com o Instagram';
-    await db.from('instagram_config').update({ last_error: message, last_run_at: new Date().toISOString() }).eq('id', 1);
+    await sql`update public.instagram_config set last_error = ${message}, last_run_at = now() where id = 1`;
     return json({ ok: false, configured: true, message });
   }
 
@@ -64,14 +71,18 @@ Deno.serve(async req => {
     }))
     .filter((s: { media_url?: string }) => !!s.media_url);
 
-  if (stories.length) await db.from('instagram_stories').upsert(stories);
-  if (st && !st.error) {
-    // Some do site o que expirou ou foi apagado no Instagram
-    const ids = stories.map((s: { id: string }) => s.id);
-    const del = db.from('instagram_stories').delete();
-    await (ids.length ? del.not('id', 'in', `(${ids.map((i: string) => `"${i}"`).join(',')})`) : del.neq('id', ''));
+  for (const s of stories) {
+    await sql`insert into public.instagram_stories (id, media_type, media_url, permalink, taken_at, expires_at, synced_at)
+      values (${s.id}, ${s.media_type}, ${s.media_url}, ${s.permalink}, ${s.taken_at}, ${s.expires_at}, now())
+      on conflict (id) do update set media_url = excluded.media_url, permalink = excluded.permalink, synced_at = now()`;
   }
-  await db.from('instagram_stories').delete().lt('expires_at', now.toISOString());
+  if (st && !st.error) {
+    // Some do site o que foi apagado no Instagram
+    const ids: string[] = stories.map((s: { id: string }) => s.id);
+    if (ids.length) await sql`delete from public.instagram_stories where id <> all(${ids})`;
+    else await sql`delete from public.instagram_stories`;
+  }
+  await sql`delete from public.instagram_stories where expires_at < now()`;
 
   const stats = {
     ...(prof?.stats || {}),
@@ -79,8 +90,8 @@ Deno.serve(async req => {
     followers: me.followers_count != null ? milhar(me.followers_count) : prof?.stats?.followers,
     following: me.follows_count ?? prof?.stats?.following,
   };
-  await db.from('store_profile').update({ stats, instagram_synced_at: now.toISOString() }).eq('id', 1);
-  await db.from('instagram_config').update({ last_error: null, last_run_at: now.toISOString(), username: me.username || null }).eq('id', 1);
+  await sql`update public.store_profile set stats = ${sql.json(stats)}, instagram_synced_at = now() where id = 1`;
+  await sql`update public.instagram_config set last_error = null, last_run_at = now(), username = ${me.username || null} where id = 1`;
 
   return json({ ok: true, stories: stories.length, followers: me.followers_count, username: me.username });
-});
+}

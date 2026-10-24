@@ -72,7 +72,7 @@ select cron.schedule(
   '*/15 * * * *',
   $$ select net.http_post(
        url := 'https://oltxefqvjrmmnajglkuj.supabase.co/functions/v1/instagram-sync',
-       headers := '{"Content-Type": "application/json"}'::jsonb,
+       headers := '{"Content-Type": "application/json", "apikey": "sb_publishable_dAwV4Dc0SQoADxDeMryF5Q_FM8Od8Vk", "Authorization": "Bearer sb_publishable_dAwV4Dc0SQoADxDeMryF5Q_FM8Od8Vk"}'::jsonb,
        body := '{}'::jsonb
      ) $$
 );

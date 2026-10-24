@@ -66,10 +66,15 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
   - Entra no combo = categoria `marmitas`/`caldos` ou id `mar-*`/`cal-*`; salgado = categoria `coxinhas` ou id `cox-*`. O kibe "contém glúten" (sem opção com/sem glúten: `hasGlutenOption`).
 - O cardápio segue o post fixado do Instagram (@levfitcongelados): tradicionais 350g R$ 21; caldos 450g R$ 21; molhos 450g (R$ 25 a 40); coxinha e kibe 110g R$ 9. Fotos reais em `public/produtos/`.
 - **Entrega** (`profile.delivery`, coluna `store_profile.delivery` jsonb, editável na aba Perfil):
-  - modo `fixed` (taxa fixa) ou `per_km` (saída + R$/km além dos km inclusos, arredondado para R$ 0,50; limite de km; grátis acima de um valor).
+  - modo `fixed` (taxa fixa) ou `per_km` (padrão: saída + R$/km além dos km inclusos, arredondado para R$ 0,50; limite de km). **Não existe frete grátis.** Taxa 0 = "a combinar".
+  - O cliente pode tocar em "Usar minha localização" (GPS do celular) para o cálculo exato; senão o endereço é achado no mapa e o site diz a precisão (número da casa, só a rua, só o CEP) com link "Ver no mapa". O link do mapa vai na mensagem do WhatsApp.
   - Cálculo em `src/lib/delivery.ts`: CEP → ViaCEP/BrasilAPI; coordenadas → Nominatim (OpenStreetMap); distância de carro → OSRM (se falhar, linha reta × 1,35). Tudo gratuito e sem chave, chamado do navegador.
   - O endereço do cliente é digitado em `components/DeliveryAddress.tsx` (CEP preenche rua/bairro/cidade) e fica salvo no navegador. Sem ponto de saída configurado ou endereço não achado → "a combinar".
   - O pedido guarda `delivery_fee` e `delivery_km`.
+- **Instagram**: a Edge Function `supabase/functions/instagram-sync` (deploy no painel do Supabase, sem "Verify JWT") copia seguidores/seguindo/publicações e os stories das últimas 24 h para `store_profile.stats` e a tabela `instagram_stories`. Roda a cada 15 min (pg_cron, `supabase/instagram.sql`) e no botão "Atualizar tudo" do painel. O token fica em `instagram_config` (sem leitura pública); o admin cola o token na aba Perfil (`salvar_token_instagram`). A foto do perfil no site abre esses stories (sem stories, abre as ofertas).
+- **Avaliações**: `testimonials` com `source = 'google'` são avaliações reais copiadas do Google (`supabase/avaliacoes-google.sql`); `store_profile.google` guarda nota, total e o link de avaliar. Aparecem na seção "O que os clientes dizem".
+- **Painel**: o perfil salva sozinho 1,5 s depois de editar; o selo no topo mostra "Tudo salvo". "Atualizar tudo" salva o que faltar, puxa o Instagram e recarrega tudo.
+- **Categorias**: as bolinhas usam desenhos de `components/CategoryIcons.tsx` (por id ou pelo nome).
 - **Stories** (`components/Stories.tsx`): as promoções ativas viram stories no topo do cardápio. `is_launch = true` coloca o story em primeiro. Todas as ofertas ativas também aparecem na faixa `OffersCarousel` no começo da página (passa sozinha a cada 4,5 s).
 - **Número do pedido** é gerado pelo banco (`criar_pedido`, sequência a partir de #1001). Se a função não existir, o app grava direto e usa os 6 primeiros caracteres do id.
 - **Telefones** são gravados só com números e sem o 55 (`normalizePhone`). Use `whatsappLink()` para qualquer link de WhatsApp.
