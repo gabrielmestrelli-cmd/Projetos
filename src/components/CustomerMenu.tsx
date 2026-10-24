@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Category, Product, Order, OrderItem, Testimonial, Promotion, BusinessProfile } from '../types';
 import { ICON_MAP, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, BUSINESS_CONFIG, CATEGORY_ORDER, INITIAL_PRODUCTS } from '../constants';
@@ -175,6 +175,24 @@ export default function CustomerMenu({
       a.name.localeCompare(b.name, 'pt-BR'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, categories, selectedCategory, searchQuery]);
+
+  // Em "Todos" (sem busca), um título separa cada categoria ao rolar a lista
+  const showSections = selectedCategory === 'all' && !searchQuery.trim();
+  const sectionHeader = (product: Product, idx: number, mode: 'feed' | 'grid') => {
+    if (!showSections) return null;
+    if (idx > 0 && filteredProducts[idx - 1].categoryId === product.categoryId) return null;
+    const cat = categories.find(c => c.id === product.categoryId);
+    if (!cat) return null;
+    return (
+      <div
+        className={`flex items-center gap-2.5 bg-slate-50/80 px-4 py-3 ${mode === 'grid' ? 'col-span-3 md:col-span-4' : 'md:col-span-2 md:rounded-xl md:mt-2'}`}
+        id={`secao-${cat.id}`}
+      >
+        <span className="h-8 w-8 shrink-0"><CategoryArt id={cat.id} name={cat.name} /></span>
+        <h2 className="text-base font-black uppercase tracking-wide text-slate-800">{cat.name}</h2>
+      </div>
+    );
+  };
 
   // iPhone (Safari): depois que um painel/janela fecha e libera a rolagem, as barras fixas
   // às vezes ficam fora do lugar. Uma rolagem de 1px força o Safari a reposicionar.
@@ -833,7 +851,7 @@ export default function CustomerMenu({
         <AnimatePresence>
           {viewMode === 'feed' ? (
             <div className="divide-y divide-slate-100 md:grid md:grid-cols-2 md:gap-x-4 md:divide-y-0">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'feed')}
                 <motion.div
                   key={product.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -895,11 +913,11 @@ export default function CustomerMenu({
                     />
                   </div>
                 </motion.div>
-              ))}
+              </Fragment>))}
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-0.5 p-0.5 md:grid-cols-4 md:gap-1">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'grid')}
                 <motion.div
                   key={product.id}
                   layout
@@ -944,7 +962,7 @@ export default function CustomerMenu({
                     )}
                   </div>
                 </motion.div>
-              ))}
+              </Fragment>))}
             </div>
           )}
         </AnimatePresence>
