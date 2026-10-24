@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Category, Product, Order, OrderItem, Testimonial, Promotion, BusinessProfile } from '../types';
-import { ICON_MAP, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, BUSINESS_CONFIG } from '../constants';
+import { ICON_MAP, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, BUSINESS_CONFIG, CATEGORY_ORDER, INITIAL_PRODUCTS } from '../constants';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -145,6 +145,23 @@ export default function CustomerMenu({
     setTimeout(() => document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
+  // Ordem do cardápio pedida pela loja: tradicionais, (lasanhas), caldos e sopas, molhos, lanches.
+  // Categoria nova (que não está na lista) vai para o fim, na ordem em que foi criada.
+  const rankOf = (categoryId: string) => {
+    const i = CATEGORY_ORDER.indexOf(categoryId);
+    return i === -1 ? CATEGORY_ORDER.length + categories.findIndex(c => c.id === categoryId) : i;
+  };
+  // Dentro da categoria: a ordem do cardápio do Instagram (constants.ts); pratos novos depois, por nome
+  const productRank = (id: string) => {
+    const i = INITIAL_PRODUCTS.findIndex(p => p.id === id);
+    return i === -1 ? 9999 : i;
+  };
+  const orderedCategories = useMemo(
+    () => [...categories].sort((a, b) => rankOf(a.id) - rankOf(b.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [categories],
+  );
+
   const filteredProducts = useMemo(() => {
     const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const q = norm(searchQuery.trim());
@@ -152,8 +169,12 @@ export default function CustomerMenu({
       const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
       const matchesSearch = !q || norm(p.name).includes(q) || norm(p.description).includes(q);
       return matchesCategory && matchesSearch && p.available;
-    });
-  }, [products, selectedCategory, searchQuery]);
+    }).sort((a, b) =>
+      rankOf(a.categoryId) - rankOf(b.categoryId) ||
+      productRank(a.id) - productRank(b.id) ||
+      a.name.localeCompare(b.name, 'pt-BR'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, categories, selectedCategory, searchQuery]);
 
   // iPhone (Safari): depois que um painel/janela fecha e libera a rolagem, as barras fixas
   // às vezes ficam fora do lugar. Uma rolagem de 1px força o Safari a reposicionar.
@@ -734,7 +755,7 @@ export default function CustomerMenu({
             TODOS
           </span>
         </button>
-        {categories.map((cat) => {
+        {orderedCategories.map((cat) => {
           const Icon = cat.icon ? ICON_MAP[cat.icon] : Package;
           return (
             <button

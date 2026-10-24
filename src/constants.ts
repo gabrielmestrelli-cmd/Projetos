@@ -35,6 +35,9 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'caldos', name: 'Caldos e Sopas', emoji: '🥣' },
 ];
 
+/** Ordem das categorias no cardápio (a loja pediu: tradicionais, caldos e sopas, molhos, lanches) */
+export const CATEGORY_ORDER = ['marmitas', 'lasanhas', 'caldos', 'molhos', 'coxinhas'];
+
 export const INITIAL_PRODUCTS: Product[] = [
   // Coxinhas
   {
