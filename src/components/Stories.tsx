@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Promotion } from '../types';
 
 const STORY_MS = 5000;
@@ -177,87 +178,88 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
 
 /** Faixa de ofertas no começo da página: passa sozinha e abre o story ao tocar. */
 export function OffersCarousel({ offers, onOpen }: { offers: Promotion[]; onOpen: (index: number) => void }) {
-  // Mostra 3 ofertas por vez; com mais de 3, a faixa anda uma oferta a cada 4,5 s.
-  const ref = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
-  const pausedUntil = useRef(0);
+  // Mostra sempre 3 ofertas inteiras lado a lado (sem card cortado).
+  // Com mais de 3, a fileira troca sozinha a cada 4,5 s; dá para arrastar para o lado.
   const VISIBLE = 3;
-  const positions = Math.max(1, offers.length - VISIBLE + 1);
+  const n = offers.length;
+  const rotating = n > VISIBLE;
+  const [start, setStart] = useState(0);
+  const pausedUntil = useRef(0);
+  const touchX = useRef<number | null>(null);
 
-  const step = () => {
-    const el = ref.current;
-    const card = el?.querySelector<HTMLElement>('[data-offer]');
-    if (!el || !card) return 0;
-    return card.offsetWidth + parseFloat(getComputedStyle(el).columnGap || '0');
-  };
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onScroll = () => {
-      const w = step();
-      if (w) setActive(Math.min(positions - 1, Math.round(el.scrollLeft / w)));
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [offers.length, positions]);
+  useEffect(() => { if (start >= n) setStart(0); }, [n, start]);
 
   useEffect(() => {
-    if (positions < 2) return;
+    if (!rotating) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const t = setInterval(() => {
-      const el = ref.current;
-      if (!el || Date.now() < pausedUntil.current) return;
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
-      el.scrollTo({ left: atEnd ? 0 : el.scrollLeft + step(), behavior: 'smooth' });
+      if (Date.now() < pausedUntil.current) return;
+      setStart(s => (s + 1) % n);
     }, 4500);
     return () => clearInterval(t);
-  }, [positions]);
+  }, [rotating, n]);
 
-  if (offers.length === 0) return null;
+  if (n === 0) return null;
   const pause = () => { pausedUntil.current = Date.now() + 8000; };
+  const go = (dir: number) => { pause(); setStart(s => (s + dir + n) % n); };
+  const shown = Array.from({ length: Math.min(VISIBLE, n) }, (_, k) => (start + k) % n);
 
   return (
     <div className="mx-auto max-w-4xl">
       <div
-        ref={ref}
-        onPointerDown={pause}
-        onTouchStart={pause}
-        className="scrollbar-hide flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto px-4 pb-2 pt-3 sm:gap-3"
+        className={`grid gap-2 px-4 pb-2 pt-3 sm:gap-3 ${n === 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}
+        onTouchStart={e => { pause(); touchX.current = e.touches[0].clientX; }}
+        onTouchEnd={e => {
+          if (!rotating || touchX.current === null) return;
+          const dx = e.changedTouches[0].clientX - touchX.current;
+          touchX.current = null;
+          if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+        }}
       >
-        {offers.map((o, i) => (
-          <button
-            key={o.id}
-            data-offer
-            onClick={() => onOpen(i)}
-            className="relative h-44 w-[calc((100%-1rem)/3)] shrink-0 snap-start overflow-hidden rounded-2xl text-left shadow-md sm:h-52 sm:w-[calc((100%-1.5rem)/3)] sm:rounded-3xl"
-            aria-label={`Ver oferta: ${o.title}`}
-          >
-            <img src={o.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" />
-            <div className={`absolute inset-0 bg-gradient-to-t ${o.isLaunch ? 'from-green-950/95 via-green-900/55' : 'from-black/85 via-black/45'} to-transparent`} />
-            <div className="relative flex h-full flex-col justify-between p-2.5 sm:p-4">
-              {o.isLaunch ? (
-                <span className="inline-flex w-fit items-center gap-0.5 rounded-full bg-lime-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-950 sm:px-2.5 sm:text-[11px]">
-                  <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Lançamento
-                </span>
-              ) : (
-                <span className="w-fit rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white sm:px-2.5 sm:text-[11px]">Oferta</span>
-              )}
-              <div className="space-y-1">
-                <h3 className="line-clamp-3 text-[13px] font-black leading-tight text-white sm:text-lg" style={{ textWrap: 'balance' }}>{o.title}</h3>
-                {o.description && <p className="hidden line-clamp-2 text-xs text-white/85 sm:block">{o.description}</p>}
-                <span className={`block text-[11px] font-bold sm:text-sm ${o.isLaunch ? 'text-lime-300' : 'text-white'}`}>
-                  {o.ctaLabel || (o.isLaunch ? 'Quero provar' : 'Ver oferta')} →
-                </span>
+        {shown.map(i => {
+          const o = offers[i];
+          return (
+            <motion.button
+              key={`${o.id}-${start}`}
+              initial={rotating ? { opacity: 0, x: 12 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.35 }}
+              data-offer
+              onClick={() => onOpen(i)}
+              className={`relative min-w-0 overflow-hidden rounded-2xl text-left shadow-md sm:rounded-3xl ${n === 1 ? 'h-40 sm:h-48' : 'h-44 sm:h-52'}`}
+              aria-label={`Ver oferta: ${o.title}`}
+            >
+              <img src={o.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <div className={`absolute inset-0 bg-gradient-to-t ${o.isLaunch ? 'from-green-950/95 via-green-900/55' : 'from-black/85 via-black/45'} to-transparent`} />
+              <div className="relative flex h-full flex-col justify-between p-2.5 sm:p-4">
+                {o.isLaunch ? (
+                  <span className="inline-flex w-fit items-center gap-0.5 rounded-full bg-lime-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-green-950 sm:px-2.5 sm:text-[11px]">
+                    <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Lançamento
+                  </span>
+                ) : (
+                  <span className="w-fit rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white sm:px-2.5 sm:text-[11px]">Oferta</span>
+                )}
+                <div className="space-y-1">
+                  <h3 className="line-clamp-3 text-[13px] font-black leading-tight text-white sm:text-lg" style={{ textWrap: 'balance' }}>{o.title}</h3>
+                  {o.description && <p className="hidden line-clamp-2 text-xs text-white/85 sm:block">{o.description}</p>}
+                  <span className={`block text-[11px] font-bold sm:text-sm ${o.isLaunch ? 'text-lime-300' : 'text-white'}`}>
+                    {o.ctaLabel || (o.isLaunch ? 'Quero provar' : 'Ver oferta')} →
+                  </span>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </motion.button>
+          );
+        })}
       </div>
-      {positions > 1 && (
+      {rotating && (
         <div className="flex justify-center gap-1.5 pb-1">
-          {Array.from({ length: positions }, (_, i) => (
-            <span key={i} className={`h-1.5 rounded-full transition-all ${i === active ? 'w-5 bg-green-600' : 'w-1.5 bg-slate-300'}`} />
+          {offers.map((o, i) => (
+            <button
+              key={o.id}
+              onClick={() => { pause(); setStart(i); }}
+              aria-label={`Mostrar a partir da oferta ${i + 1}`}
+              className={`h-1.5 rounded-full transition-all ${i === start ? 'w-5 bg-green-600' : 'w-1.5 bg-slate-300'}`}
+            />
           ))}
         </div>
       )}
