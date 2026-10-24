@@ -29,6 +29,9 @@ alter table public.store_profile add column if not exists is_open boolean defaul
 alter table public.store_profile add column if not exists stats jsonb;
 alter table public.store_profile add column if not exists profile_picture text;
 
+alter table public.products add column if not exists type text default 'pronta-entrega';
+alter table public.products add column if not exists ingredients text[] default '{}';
+
 alter table public.orders add column if not exists delivery_type text;
 alter table public.orders add column if not exists address text;
 alter table public.orders add column if not exists delivery_fee numeric default 0;

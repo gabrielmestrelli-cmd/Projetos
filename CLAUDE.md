@@ -27,6 +27,7 @@ App web de cardápio digital e pedidos da **Lev & Fit**, marmitas congeladas sau
 | Build de produção | `npm run build` → `dist/` |
 
 Depois de qualquer alteração, rode `npm run lint` e `npm run build`.
+Se mudar `supabase/seguranca.sql` ou o cardápio inicial, rode `npx tsx scripts/gerar-sql-inicial.ts` para atualizar o `instalar.sql`.
 
 O painel admin é carregado sob demanda (`React.lazy`), e as bibliotecas ficam em arquivos separados (`manualChunks` no `vite.config.ts`).
 
@@ -49,7 +50,9 @@ src/
   constants.ts          # cardápio/perfil iniciais (fallback se o banco estiver vazio)
   types.ts              # tipos (Order, Product, Category, ...)
   productImages.ts
-supabase/seguranca.sql  # regras RLS + função is_admin + pedidos_do_cliente
+supabase/instalar.sql   # INSTALAÇÃO COMPLETA num projeto novo (tabelas + segurança + cardápio)
+supabase/seguranca.sql  # só regras RLS/funções (para um banco que já tem as tabelas)
+scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + constants.ts
 ```
 
 ## 5. Regras de negócio
@@ -87,3 +90,5 @@ Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`),
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...   # chave publishable/anon, pode ser pública
 ```
+
+Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.ts` e não grava nada.

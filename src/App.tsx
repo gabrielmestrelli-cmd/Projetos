@@ -103,7 +103,8 @@ export default function App() {
             categoryId: p.category_id,
             image: p.image_url || '',
             available: p.is_active ?? true,
-            type: 'pronta-entrega',
+            type: p.type === 'encomenda' ? 'encomenda' : 'pronta-entrega',
+            ingredients: Array.isArray(p.ingredients) && p.ingredients.length ? p.ingredients : undefined,
             tags: p.tags || []
           })));
         }
@@ -299,6 +300,8 @@ export default function App() {
         image_url: prod.image,
         is_active: prod.available,
         tags: prod.tags || [],
+        type: prod.type || 'pronta-entrega',
+        ingredients: prod.ingredients || [],
       }))),
       newProfile ? supabase.from('store_profile').upsert({
         id: 1,
