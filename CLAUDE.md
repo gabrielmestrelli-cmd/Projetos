@@ -114,3 +114,5 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 - No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, veja na Vercel qual projeto tem o domínio).
 - O site é estático: `npm run build` gera `dist/`, que é enviado com `vercel deploy dist --prod` (precisa `vercel login`). As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
+- Publicar **sempre o `dist/` inteiro** e manter junto os arquivos de `assets/` das versões anteriores. Os assets têm cache de 1 ano (`immutable`); se um arquivo faltar, o Safari guarda o "não encontrado" e a página fica branca. Por isso o `vite.config.ts` põe um código de build novo no nome de cada arquivo, e o `vercel.json` manda `no-store` no `/` e no `index.html`.
+- `src/main.tsx` tem um ErrorBoundary (nunca tela branca: mostra aviso, botão Recarregar e WhatsApp) e recarrega sozinho uma vez se um arquivo antigo não carregar.
