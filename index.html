@@ -15,6 +15,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Ative o JavaScript para ver o cardápio da Lev &amp; Fit.</noscript>
+    <script>
+      // Arquivo do site não carregou (página antiga aberta durante uma atualização): recarrega uma vez
+      window.addEventListener('error', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+          try {
+            if (!sessionStorage.getItem('reloaded-after-update')) { sessionStorage.setItem('reloaded-after-update', '1'); location.reload(); }
+          } catch (_) {}
+        }
+      }, true);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
