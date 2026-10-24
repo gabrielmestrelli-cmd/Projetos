@@ -69,7 +69,7 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
   - Cálculo em `src/lib/delivery.ts`: CEP → ViaCEP/BrasilAPI; coordenadas → Nominatim (OpenStreetMap); distância de carro → OSRM (se falhar, linha reta × 1,35). Tudo gratuito e sem chave, chamado do navegador.
   - O endereço do cliente é digitado em `components/DeliveryAddress.tsx` (CEP preenche rua/bairro/cidade) e fica salvo no navegador. Sem ponto de saída configurado ou endereço não achado → "a combinar".
   - O pedido guarda `delivery_fee` e `delivery_km`.
-- **Stories** (`components/Stories.tsx`): as promoções ativas viram stories no topo do cardápio. `is_launch = true` coloca o story em primeiro e mostra o banner grande de lançamento (hoje: sucos).
+- **Stories** (`components/Stories.tsx`): as promoções ativas viram stories no topo do cardápio. `is_launch = true` coloca o story em primeiro. Todas as ofertas ativas também aparecem na faixa `OffersCarousel` no começo da página (passa sozinha a cada 4,5 s).
 - **Número do pedido** é gerado pelo banco (`criar_pedido`, sequência a partir de #1001). Se a função não existir, o app grava direto e usa os 6 primeiros caracteres do id.
 - **Telefones** são gravados só com números e sem o 55 (`normalizePhone`). Use `whatsappLink()` para qualquer link de WhatsApp.
 - Nunca montar texto de URL na mão: sempre `encodeURIComponent` (o `&` de "Lev & Fit" quebrava a mensagem).

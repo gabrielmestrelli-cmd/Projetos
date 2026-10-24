@@ -20,7 +20,7 @@ import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/ph
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
 import { DEFAULT_DELIVERY, feeFor, formatKm } from '../lib/delivery';
-import { StoryRing, StoryViewer, orderStories } from './Stories';
+import { StoryRing, StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { AddressForm, QuoteBox, useDeliveryQuote, loadSavedAddress, saveAddress, formatAddress, isAddressComplete, AddressFields } from './DeliveryAddress';
 
 interface CustomerMenuProps {
@@ -129,7 +129,6 @@ export default function CustomerMenu({
   const hasOptions = (product: Product) => isCoxinha(product) || product.categoryId === 'marmitas';
 
   const stories = useMemo(() => orderStories(promotions), [promotions]);
-  const launch = stories.find(st => st.isLaunch) || null;
 
   const handleStoryCta = (story: Promotion) => {
     // Se existir categoria de sucos e o story for de lançamento, abre ela
@@ -513,6 +512,9 @@ export default function CustomerMenu({
         </div>
       </div>
 
+      {/* Ofertas no começo da página */}
+      <OffersCarousel offers={stories} onOpen={setStoryIndex} />
+
       <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
@@ -661,27 +663,6 @@ export default function CustomerMenu({
                   : 'Calcular entrega'}
               </button>
             </div>
-
-            {/* Destaque do lançamento */}
-            {launch && (
-              <div className="mx-auto mb-2 max-w-4xl px-4">
-                <button
-                  onClick={() => setStoryIndex(stories.findIndex(st => st.id === launch.id))}
-                  className="relative block h-44 w-full overflow-hidden rounded-3xl text-left shadow-md"
-                >
-                  <img src={launch.image} alt="" className="absolute inset-0 h-full w-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-0 bg-gradient-to-r from-green-950/85 via-green-900/50 to-transparent" />
-                  <div className="relative flex h-full max-w-[75%] flex-col justify-center gap-1.5 p-5">
-                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-lime-400 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-green-950">
-                      <Sparkles className="h-3 w-3" /> Lançamento
-                    </span>
-                    <h3 className="text-2xl font-black leading-tight text-white" style={{ textWrap: 'balance' }}>{launch.title}</h3>
-                    {launch.description && <p className="line-clamp-2 text-sm text-white/85">{launch.description}</p>}
-                    <span className="mt-1 text-sm font-bold text-lime-300">{launch.ctaLabel || 'Quero provar'} →</span>
-                  </div>
-                </button>
-              </div>
-            )}
 
       {/* Stories Style Categories */}
       <div className="flex gap-4 overflow-x-auto py-6 scrollbar-hide px-4 border-b border-slate-100">
