@@ -67,22 +67,6 @@ export default function AdminPanel({
   const [isTestimonialDialogOpen, setIsTestimonialDialogOpen] = useState(false);
   const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
   const [qrTableNumber, setQrTableNumber] = useState('1');
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSyncToSupabase = async () => {
-    setIsSyncing(true);
-    const loadingToast = toast.loading('Sincronizando dados com Supabase...');
-    try {
-      const ok = await onUpdateMenu(categories, products, testimonials, promotions, profile);
-      if (ok) toast.success('Dados sincronizados com sucesso!', { id: loadingToast });
-      else toast.dismiss(loadingToast);
-    } catch (err) {
-      console.error('Sync error:', err);
-      toast.error('Erro ao sincronizar dados.', { id: loadingToast });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   // Reduz a foto para no máximo 900px e JPEG ~80%: fica leve pro banco e pro celular do cliente
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
@@ -494,19 +478,6 @@ export default function AdminPanel({
               <span className="text-xs sm:text-sm">QR Code</span>
             </TabsTrigger>
           </TabsList>
-        </div>
-
-        <div className="flex justify-end mt-4">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleSyncToSupabase}
-            disabled={isSyncing}
-            className="text-xs border-slate-200 hover:bg-slate-50"
-          >
-            {isSyncing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-2 h-3 w-3 text-green-600" />}
-            Sincronizar tudo com Supabase
-          </Button>
         </div>
 
         {/* Profile Tab */}

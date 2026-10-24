@@ -282,16 +282,28 @@ export default function App() {
       profile: newProfile || profile
     }));
 
-    // Salva no Supabase em lote (uma requisição por tabela)
+    // Só envia o que mudou: assim um painel aberto há tempo não sobrescreve
+    // produtos que outra pessoa (ou o banco) alterou nesse meio tempo.
+    const changed = <T extends { id: string }>(next: T[], prev: T[]) =>
+      next.filter(item => {
+        const old = prev.find(p => p.id === item.id);
+        return !old || JSON.stringify(old) !== JSON.stringify(item);
+      });
+    const catsToSave = changed(newCategories, categories);
+    const prodsToSave = changed(newProducts, products);
+    const testsToSave = newTestimonials ? changed(newTestimonials, testimonials) : [];
+    const promsToSave = newPromotions ? changed(newPromotions, promotions) : [];
+    const skip = Promise.resolve(null);
+
     const results = await Promise.all([
-      supabase.from('categories').upsert(newCategories.map(cat => ({
+      catsToSave.length === 0 ? skip : supabase.from('categories').upsert(catsToSave.map(cat => ({
         id: cat.id,
         name: cat.name,
         icon: cat.icon,
         emoji: cat.emoji,
         image_url: cat.image || null,
       }))),
-      supabase.from('products').upsert(newProducts.map(prod => ({
+      prodsToSave.length === 0 ? skip : supabase.from('products').upsert(prodsToSave.map(prod => ({
         id: prod.id,
         name: prod.name,
         description: prod.description,
@@ -300,7 +312,7 @@ export default function App() {
         image_url: prod.image,
         is_active: prod.available,
         tags: prod.tags || [],
-        type: prod.type || 'pronta-entrega',
+        type: prod.type || 'encomenda',
         ingredients: prod.ingredients || [],
       }))),
       newProfile ? supabase.from('store_profile').upsert({
@@ -316,22 +328,22 @@ export default function App() {
         stats: newProfile.stats,
         profile_picture: newProfile.profilePicture || null,
       }) : null,
-      newTestimonials ? supabase.from('testimonials').upsert(newTestimonials.map(t => ({
+      testsToSave.length === 0 ? skip : supabase.from('testimonials').upsert(testsToSave.map(t => ({
         id: t.id,
         name: t.name,
         comment: t.comment,
         rating: t.rating,
         avatar_url: t.avatar,
         created_at: t.createdAt,
-      }))) : null,
-      newPromotions ? supabase.from('promotions').upsert(newPromotions.map(p => ({
+      }))),
+      promsToSave.length === 0 ? skip : supabase.from('promotions').upsert(promsToSave.map(p => ({
         id: p.id,
         title: p.title,
         description: p.description,
         image_url: p.image,
         is_active: p.active,
         created_at: p.createdAt,
-      }))) : null,
+      }))),
     ]);
 
     const failed = results.find(r => r && r.error);
