@@ -512,9 +512,6 @@ export default function CustomerMenu({
         </div>
       </div>
 
-      {/* Ofertas no começo da página */}
-      <OffersCarousel offers={stories} onOpen={setStoryIndex} />
-
       <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
@@ -638,6 +635,9 @@ export default function CustomerMenu({
             exit={{ opacity: 0, y: -10 }}
             className="space-y-0 pb-24"
           >
+            {/* Ofertas logo abaixo do perfil */}
+            <OffersCarousel offers={stories} onOpen={setStoryIndex} />
+
             {/* Stories das ofertas */}
             <div className="mx-auto max-w-4xl">
               <StoryRing stories={stories} onOpen={setStoryIndex} />
