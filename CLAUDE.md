@@ -61,9 +61,10 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
 - Todos os produtos são **sob encomenda** (`type = 'encomenda'`), que é o padrão para produto novo.
 
 - **Descontos** ficam só em `src/lib/pricing.ts` (`PRICING`):
-  - 10+ marmitas → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
-  - coxinhas: cada 3 saem por R$ 24.
-  - Marmita = categoria `marmitas` ou id `mar-*`; coxinha = categoria `coxinhas` ou id `cox-*`.
+  - 10+ marmitas/caldos (pode misturar) → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
+  - salgados (coxinha e kibe, pode misturar): cada 3 saem por R$ 24.
+  - Entra no combo = categoria `marmitas`/`caldos` ou id `mar-*`/`cal-*`; salgado = categoria `coxinhas` ou id `cox-*`. O kibe "contém glúten" (sem opção com/sem glúten: `hasGlutenOption`).
+- O cardápio segue o post fixado do Instagram (@levfitcongelados): tradicionais 350g R$ 21; caldos 450g R$ 21; molhos 450g (R$ 25 a 40); coxinha e kibe 110g R$ 9. Fotos reais em `public/produtos/`.
 - **Entrega** (`profile.delivery`, coluna `store_profile.delivery` jsonb, editável na aba Perfil):
   - modo `fixed` (taxa fixa) ou `per_km` (saída + R$/km além dos km inclusos, arredondado para R$ 0,50; limite de km; grátis acima de um valor).
   - Cálculo em `src/lib/delivery.ts`: CEP → ViaCEP/BrasilAPI; coordenadas → Nominatim (OpenStreetMap); distância de carro → OSRM (se falhar, linha reta × 1,35). Tudo gratuito e sem chave, chamado do navegador.
