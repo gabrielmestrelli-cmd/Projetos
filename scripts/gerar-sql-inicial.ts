@@ -39,7 +39,7 @@ create table if not exists public.products (
   image_url text,
   is_active boolean not null default true,
   tags text[] not null default '{}',
-  type text default 'pronta-entrega',
+  type text default 'encomenda',
   ingredients text[] default '{}'
 );
 

@@ -45,7 +45,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 9.00,
     image: 'https://ais-studio-build-user-uploads.s3.us-east-1.amazonaws.com/fe1b00dc-5c1d-4ceb-b6ec-f2af240bbd08/image_1712045051.png',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   // Marmitas Tradicionais
   {
@@ -56,7 +56,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-2',
@@ -66,7 +66,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1595295333158-4742f28fbd85?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-3',
@@ -76,7 +76,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-4',
@@ -86,7 +86,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1595295333158-4742f28fbd85?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-5',
@@ -96,7 +96,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-6',
@@ -106,7 +106,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-7',
@@ -116,7 +116,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-8',
@@ -126,7 +126,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-9',
@@ -136,7 +136,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-10',
@@ -146,7 +146,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-11',
@@ -156,7 +156,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-12',
@@ -166,7 +166,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-13',
@@ -176,7 +176,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-14',
@@ -186,7 +186,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-15',
@@ -196,7 +196,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-16',
@@ -206,7 +206,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-17',
@@ -216,7 +216,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-18',
@@ -226,7 +226,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-19',
@@ -236,7 +236,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-20',
@@ -246,7 +246,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-trad-21',
@@ -256,7 +256,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-1',
@@ -266,7 +266,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Peito de frango', 'Creme de leite light', 'Champignon', 'Arroz branco', 'Batata rústica'],
   },
   {
@@ -288,7 +288,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-4',
@@ -298,7 +298,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1595295333158-4742f28fbd85?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Carne moída (patinho)', 'Batata', 'Molho de tomate artesanal', 'Leite desnatado', 'Temperos'],
   },
   {
@@ -309,7 +309,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-5'] || 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Carne moída (patinho)', 'Macarrão integral', 'Molho de tomate artesanal', 'Manjericão'],
   },
   {
@@ -320,7 +320,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-6'] || 'https://images.unsplash.com/photo-1594973557371-75971b7c6cce?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-7',
@@ -330,7 +330,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-7'] || 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-8',
@@ -340,7 +340,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-8'] || 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-9',
@@ -350,7 +350,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-9'] || 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-10',
@@ -360,7 +360,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: PRODUCT_IMAGES['mar-10'] || 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-11',
@@ -370,7 +370,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'mar-12',
@@ -380,7 +380,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   // Lasanhas
   {
@@ -391,7 +391,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 21.00,
     image: 'https://images.unsplash.com/photo-1619895092538-128341789043?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Berinjela', 'Molho de tomate artesanal', 'Queijo branco light', 'Manjericão fresco'],
   },
   {
@@ -413,7 +413,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Couve manteiga', 'Batata', 'Paio light', 'Caldo de legumes natural', 'Alho'],
   },
   {
@@ -435,7 +435,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: PRODUCT_IMAGES['cal-3'] || 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
     ingredients: ['Feijão carioca', 'Macarrão ave-maria integral', 'Cenoura', 'Chuchu', 'Temperos'],
   },
   {
@@ -446,7 +446,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: PRODUCT_IMAGES['cal-4'] || 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'cal-5',
@@ -456,7 +456,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: PRODUCT_IMAGES['cal-5'] || 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'cal-6',
@@ -466,7 +466,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'cal-7',
@@ -476,7 +476,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'cal-8',
@@ -486,7 +486,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   {
     id: 'cal-9',
@@ -496,7 +496,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 18.00,
     image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop',
     available: true,
-    type: 'pronta-entrega',
+    type: 'encomenda',
   },
   // Molhos
   {

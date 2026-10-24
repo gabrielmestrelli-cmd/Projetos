@@ -246,7 +246,7 @@ export default function AdminPanel({
     );
   }
 
-  const emptyProductForm: Partial<Product> = { name: '', description: '', price: 21, categoryId: '', available: true, image: '', type: 'pronta-entrega', tags: [], ingredients: [] };
+  const emptyProductForm: Partial<Product> = { name: '', description: '', price: 21, categoryId: '', available: true, image: '', type: 'encomenda', tags: [], ingredients: [] };
 
   const openNewProduct = () => {
     setEditingProduct(null);
@@ -925,7 +925,7 @@ export default function AdminPanel({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-2">
                     <Label htmlFor="prod-type">Tipo</Label>
-                    <Select value={productForm.type || 'pronta-entrega'} onValueChange={(val) => setProductForm(f => ({ ...f, type: val as Product['type'] }))}>
+                    <Select value={productForm.type || 'encomenda'} onValueChange={(val) => setProductForm(f => ({ ...f, type: val as Product['type'] }))}>
                       <SelectTrigger id="prod-type">
                         <SelectValue>{(v: string) => (v === 'encomenda' ? 'Sob encomenda' : 'Pronta entrega')}</SelectValue>
                       </SelectTrigger>

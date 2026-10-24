@@ -103,7 +103,7 @@ export default function App() {
             categoryId: p.category_id,
             image: p.image_url || '',
             available: p.is_active ?? true,
-            type: p.type === 'encomenda' ? 'encomenda' : 'pronta-entrega',
+            type: p.type === 'pronta-entrega' ? 'pronta-entrega' : 'encomenda',
             ingredients: Array.isArray(p.ingredients) && p.ingredients.length ? p.ingredients : undefined,
             tags: p.tags || []
           })));
