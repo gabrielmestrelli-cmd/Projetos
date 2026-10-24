@@ -515,6 +515,31 @@ export default function CustomerMenu({
 
   return (
     <div className="min-h-screen bg-white pb-24">
+      {/* Instagram Style Header */}
+      <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between md:hidden">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">@{profile.instagram}</h1>
+          <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
+        </div>
+        <div className="flex items-center gap-4 text-slate-700">
+          <button aria-label="Buscar" onClick={() => {
+            setActiveTab('menu');
+            setTimeout(() => {
+              document.getElementById('produtos')?.scrollIntoView({ behavior: 'smooth' });
+              searchInputRef.current?.focus();
+            }, 50);
+          }}>
+            <Search className="w-6 h-6" />
+          </button>
+          <button aria-label="Carrinho" className="relative" onClick={() => setIsCartOpen(true)}>
+            <ShoppingCart className="w-6 h-6" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{cartCount}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
       <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
