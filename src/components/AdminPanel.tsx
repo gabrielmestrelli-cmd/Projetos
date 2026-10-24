@@ -747,7 +747,7 @@ export default function AdminPanel({
                         })
                         .map((order) => (
                         <TableRow key={order.id}>
-                          <TableCell>
+                          <TableCell className="align-top">
                             <div className="flex flex-col">
                               <span className="font-bold text-green-700">#{order.orderNumber || order.id.slice(0, 4).toUpperCase()}</span>
                               {order.createdAt ? (
@@ -759,7 +759,7 @@ export default function AdminPanel({
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[190px] max-w-[260px] whitespace-normal align-top">
                             <div className="flex flex-col">
                               <span className="font-bold flex items-center gap-1 text-sm">
                                 {order.customerName}
@@ -779,19 +779,19 @@ export default function AdminPanel({
                               {order.deliveryType && (
                                 <span className="mt-1 flex items-start gap-1 text-xs text-slate-600">
                                   {order.deliveryType === 'entrega'
-                                    ? <><Bike className="mt-0.5 h-3 w-3 shrink-0" /><span className="max-w-[220px]">{order.address || 'Entrega'}</span></>
+                                    ? <><Bike className="mt-0.5 h-3 w-3 shrink-0" /><span className="break-words">{order.address || 'Entrega'}{order.deliveryKm ? ` (${formatKm(order.deliveryKm)})` : ''}</span></>
                                     : <><Store className="mt-0.5 h-3 w-3 shrink-0" /> Retirada</>}
                                 </span>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[220px] max-w-[340px] whitespace-normal align-top">
                             <div className="text-xs space-y-1">
                               {order.items.map((item, idx) => (
-                                <div key={idx}>
+                                <div key={idx} className="break-words leading-snug">
                                   <span className="font-semibold">{item.quantity}x</span> {item.name}
                                   {item.notes && (
-                                    <span className={`ml-1 rounded px-1 font-bold ${item.notes.startsWith('Sem') ? 'bg-blue-100 text-blue-700' : 'text-slate-500'}`}>
+                                    <span className={`ml-1 inline-block rounded px-1 font-bold ${item.notes.startsWith('Sem') ? 'bg-blue-100 text-blue-700' : 'text-slate-500'}`}>
                                       {item.notes}
                                     </span>
                                   )}
@@ -804,7 +804,7 @@ export default function AdminPanel({
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium align-top">
                             <div className="flex flex-col">
                               <span className="tabular-nums">{formatBRL(order.total)}</span>
                               {order.discount > 0 && (
@@ -815,7 +815,7 @@ export default function AdminPanel({
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="align-top">
                             <div className="flex items-center gap-1 text-xs">
                               {order.paymentMethod === 'pix' && <Landmark className="h-3 w-3" />}
                               {order.paymentMethod === 'cartao-link' && <CreditCard className="h-3 w-3" />}
@@ -823,8 +823,8 @@ export default function AdminPanel({
                               <span>{order.paymentMethod === 'pix' ? 'PIX' : order.paymentMethod === 'cartao-link' ? 'Cartão (link)' : 'Dinheiro'}</span>
                             </div>
                           </TableCell>
-                          <TableCell>{getStatusBadge(order.status)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="align-top">{getStatusBadge(order.status)}</TableCell>
+                          <TableCell className="text-right align-top">
                             <Select 
                               value={order.status || 'pending'} 
                               onValueChange={(val) => onUpdateOrderStatus(order.id, val as OrderStatus)}
