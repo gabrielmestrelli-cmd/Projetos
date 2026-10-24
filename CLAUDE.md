@@ -57,6 +57,8 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
 
 ## 5. Regras de negócio
 
+- Todos os produtos são **sob encomenda** (`type = 'encomenda'`), que é o padrão para produto novo.
+
 - **Descontos** ficam só em `src/lib/pricing.ts` (`PRICING`):
   - 10+ marmitas → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
   - coxinhas: cada 3 saem por R$ 24.
@@ -78,7 +80,7 @@ Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`),
   - cliente vê os próprios pedidos pela função `pedidos_do_cliente(telefone)`.
 - `store_profile` guarda também `bio`, `is_open`, `stats` (publicações/seguidores) e `profile_picture`.
 - `orders` guarda também `delivery_type`, `address`, `delivery_fee` e `notes`.
-- O app salva cada tabela em **uma** requisição (`upsert` em lote) e mostra aviso se der erro. Não engolir erros do Supabase: ele devolve `{ error }` em vez de lançar exceção.
+- O app salva **só os itens que mudaram** (compara com o estado atual) em um `upsert` por tabela, e mostra aviso se der erro. Nunca reenviar a lista inteira: um painel aberto há tempo sobrescreveria mudanças feitas no banco. Não engolir erros do Supabase: ele devolve `{ error }` em vez de lançar exceção.
 - Fotos enviadas no admin são reduzidas para 900px / JPEG 80% antes de salvar.
 - Pedidos novos chegam ao admin em tempo real via `supabase.channel` (Realtime) na tabela `orders`.
 - **Nunca** colocar a chave `service_role` ou chaves de IA no frontend (tudo com `VITE_` ou `define` vai parar no site). Recursos que precisam de chave secreta devem virar Supabase Edge Function.
@@ -95,6 +97,6 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 
 ## 8. Publicação
 
-- No ar em **https://levfit-congelados.vercel.app** (projeto `levfit-congelados` na conta Vercel `bobmendes`).
+- No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, hoje `quick-oasis-3hgp2ca`).
 - O site é estático: `npm run build` gera `dist/`, que é enviado com `vercel deploy dist --prod` (precisa `vercel login`). As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
