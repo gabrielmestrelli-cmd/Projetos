@@ -92,3 +92,9 @@ VITE_SUPABASE_ANON_KEY=...   # chave publishable/anon, pode ser pública
 ```
 
 Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.ts` e não grava nada.
+
+## 8. Publicação
+
+- No ar em **https://levfit-congelados.vercel.app** (projeto `levfit-congelados` na conta Vercel `bobmendes`).
+- O site é estático: `npm run build` gera `dist/`, que é enviado com `vercel deploy dist --prod` (precisa `vercel login`). As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
+- Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
