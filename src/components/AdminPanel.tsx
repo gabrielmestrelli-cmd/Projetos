@@ -4,6 +4,7 @@ import { ICON_MAP, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } f
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Loader2, MessageCircle, LogOut, Volume2, Bike, Store, MapPin, StickyNote, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, QrCode, CheckCircle2, Clock, XCircle, CookingPot, ChevronRight, Package, LayoutGrid, ClipboardList, User, Phone, CreditCard, Banknote, Landmark, Star, Loader2, MessageCircle, LogOut, Volume2, Bike, Store, MapPin, StickyNote, RefreshCw, Search, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -158,6 +159,9 @@ export default function AdminPanel({
   }, [profile]);
   const [prevOrdersCount, setPrevOrdersCount] = useState(orders.length);
   const [orderSearch, setOrderSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('all');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const newOrder = orders[0];
@@ -242,29 +246,53 @@ export default function AdminPanel({
     );
   }
 
-  const handleSaveProduct = () => {
-    if (!productForm.name || !productForm.categoryId || !productForm.price) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
+  const emptyProductForm: Partial<Product> = { name: '', description: '', price: 21, categoryId: '', available: true, image: '', type: 'pronta-entrega', tags: [], ingredients: [] };
 
-    let newProducts: Product[];
-    if (editingProduct) {
-      newProducts = products.map(p => p.id === editingProduct.id ? { ...editingProduct, ...productForm } as Product : p);
-      toast.success('Produto atualizado');
-    } else {
-      const newProduct: Product = {
-        id: newId(),
-        ...productForm as Product,
-      };
-      newProducts = [...products, newProduct];
-      toast.success('Produto adicionado');
-    }
-
-    onUpdateMenu(categories, newProducts);
-    setIsProductDialogOpen(false);
+  const openNewProduct = () => {
     setEditingProduct(null);
-    setProductForm({ name: '', description: '', price: 15, categoryId: '', available: true, image: '', type: 'pronta-entrega' });
+    setConfirmDeleteId(null);
+    setProductForm({ ...emptyProductForm, categoryId: productCategoryFilter !== 'all' ? productCategoryFilter : '' });
+    setIsProductDialogOpen(true);
+  };
+
+  const openEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setConfirmDeleteId(null);
+    setProductForm({ ...product, tags: product.tags || [], ingredients: product.ingredients || [] });
+    setIsProductDialogOpen(true);
+  };
+
+  const handleSaveProduct = async () => {
+    const name = (productForm.name || '').trim();
+    const price = Number(productForm.price);
+    if (!name) { toast.error('Coloque o nome do produto'); return; }
+    if (!productForm.categoryId) { toast.error('Escolha a categoria'); return; }
+    if (!Number.isFinite(price) || price <= 0) { toast.error('Coloque um preço maior que zero'); return; }
+
+    const clean: Partial<Product> = {
+      ...productForm,
+      name,
+      price: Math.round(price * 100) / 100,
+      description: (productForm.description || '').trim(),
+      tags: (productForm.tags || []).map(t => t.trim()).filter(Boolean),
+      ingredients: (productForm.ingredients || []).map(t => t.trim()).filter(Boolean),
+    };
+
+    const newProducts: Product[] = editingProduct
+      ? products.map(p => p.id === editingProduct.id ? { ...editingProduct, ...clean } as Product : p)
+      : [...products, { ...(clean as Product), id: newId() }];
+
+    const ok = await onUpdateMenu(categories, newProducts);
+    if (ok) {
+      toast.success(editingProduct ? 'Produto atualizado' : 'Produto adicionado');
+      setIsProductDialogOpen(false);
+      setEditingProduct(null);
+    }
+  };
+
+  const toggleProductAvailable = async (product: Product, available: boolean) => {
+    const ok = await onUpdateMenu(categories, products.map(p => p.id === product.id ? { ...p, available } : p));
+    if (ok) toast.success(available ? `${product.name} voltou pro cardápio` : `${product.name} escondido do cardápio`);
   };
 
   const handleSaveCategory = () => {
@@ -293,15 +321,16 @@ export default function AdminPanel({
   };
 
   const handleDeleteProduct = async (id: string) => {
-    const newProducts = products.filter(p => p.id !== id);
-    onUpdateMenu(categories, newProducts);
-    
-    try {
-      await supabase.from('products').delete().eq('id', id);
-      toast.success('Produto removido');
-    } catch (err) {
-      console.error('Error deleting product:', err);
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) {
+      toast.error('Não foi possível apagar o produto', { description: error.message });
+      return;
     }
+    await onUpdateMenu(categories, products.filter(p => p.id !== id));
+    setConfirmDeleteId(null);
+    setIsProductDialogOpen(false);
+    setEditingProduct(null);
+    toast.success('Produto apagado');
   };
 
   const handleDeleteCategory = async (id: string) => {
@@ -428,12 +457,12 @@ export default function AdminPanel({
         </div>
       </div>
 
-      <Tabs defaultValue="orders" className="w-full" onValueChange={setActiveTab}>
+      <Tabs defaultValue="orders" className="w-full min-w-0" onValueChange={setActiveTab}>
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
           <TabsList className="flex w-max sm:grid sm:w-full sm:grid-cols-7 lg:w-[900px]">
             <TabsTrigger value="orders" className="flex items-center gap-2 min-w-[100px] sm:min-w-0 relative">
               <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">Pedidos</span>
+              <span className="text-xs sm:text-sm">Pedidos</span>
               {orders.filter(o => o.status === 'pending').length > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                   {orders.filter(o => o.status === 'pending').length}
@@ -442,27 +471,27 @@ export default function AdminPanel({
             </TabsTrigger>
             <TabsTrigger value="products" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Produtos</span>
+              <span className="text-xs sm:text-sm">Produtos</span>
             </TabsTrigger>
             <TabsTrigger value="categories" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Marmitas</span>
+              <span className="text-xs sm:text-sm">Marmitas</span>
             </TabsTrigger>
             <TabsTrigger value="profile" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Perfil</span>
+              <span className="text-xs sm:text-sm">Perfil</span>
             </TabsTrigger>
             <TabsTrigger value="promotions" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <Star className="h-4 w-4" />
-              <span className="hidden sm:inline">Promoções</span>
+              <span className="text-xs sm:text-sm">Promoções</span>
             </TabsTrigger>
             <TabsTrigger value="testimonials" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Feedback</span>
+              <span className="text-xs sm:text-sm">Feedback</span>
             </TabsTrigger>
             <TabsTrigger value="qrcode" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
               <QrCode className="h-4 w-4" />
-              <span className="hidden sm:inline">QR Code</span>
+              <span className="text-xs sm:text-sm">QR Code</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -765,145 +794,190 @@ export default function AdminPanel({
         </TabsContent>
 
         {/* Products Tab */}
-        <TabsContent value="products" className="mt-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <h3 className="text-lg font-semibold">Gerenciar Produtos</h3>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-              <DialogTrigger render={
-                <Button className="bg-green-600 hover:bg-green-700" onClick={() => {
-                  setEditingProduct(null);
-                  setProductForm({ name: '', description: '', price: 15, categoryId: '', available: true, image: '', type: 'pronta-entrega' });
-                }}>
-                  <Plus className="mr-2 h-4 w-4" /> Novo Produto
+        <TabsContent value="products" className="mt-6 min-w-0 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Produtos</h3>
+              <p className="text-sm text-slate-500">Toque em um produto para editar nome, preço, foto e descrição.</p>
+            </div>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={openNewProduct}>
+              <Plus className="mr-2 h-4 w-4" /> Novo produto
+            </Button>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input placeholder="Buscar produto" className="pl-9" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+            </div>
+            <div className="flex min-w-0 gap-1 overflow-x-auto pb-1">
+              {[{ id: 'all', name: 'Todos' }, ...categories].map(c => (
+                <Button
+                  key={c.id}
+                  size="sm"
+                  variant={productCategoryFilter === c.id ? 'default' : 'outline'}
+                  className={`shrink-0 ${productCategoryFilter === c.id ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                  onClick={() => setProductCategoryFilter(c.id)}
+                >
+                  {c.name}
                 </Button>
-              } />
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>{editingProduct ? 'Editar Produto' : 'Adicionar Produto'}</DialogTitle>
-                  <DialogDescription>Preencha as informações do produto para o cardápio.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">Nome do Produto</Label>
-                    <Input id="name" value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="price">Preço (R$)</Label>
-                      <Input id="price" type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm({...productForm, price: parseFloat(e.target.value)})} />
+              ))}
+            </div>
+          </div>
+
+          {(() => {
+            const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const q = norm(productSearch.trim());
+            const list = products
+              .filter(p => productCategoryFilter === 'all' || p.categoryId === productCategoryFilter)
+              .filter(p => !q || norm(p.name).includes(q));
+            if (list.length === 0) {
+              return <p className="rounded-xl border border-dashed p-8 text-center text-slate-500">Nenhum produto encontrado.</p>;
+            }
+            return (
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {list.map(product => (
+                  <div key={product.id} className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 ${product.available ? '' : 'opacity-60'}`}>
+                    <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openEditProduct(product)}>
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                        {product.image
+                          ? <img src={product.image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          : <ImageOff className="h-5 w-5 text-slate-300" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-900">{product.name}</p>
+                        <p className="text-sm font-bold text-green-700 tabular-nums">{formatBRL(product.price)}</p>
+                        <p className="truncate text-xs text-slate-400">{categories.find(c => c.id === product.categoryId)?.name || 'Sem categoria'}</p>
+                      </div>
+                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEditProduct(product)}>
+                        <Edit className="mr-1 h-3.5 w-3.5" /> Editar
+                      </Button>
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <Switch checked={product.available} onCheckedChange={(v) => toggleProductAvailable(product, v)} aria-label="Mostrar no cardápio" />
+                        {product.available ? 'No cardápio' : 'Escondido'}
+                      </label>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="type">Tipo de Entrega</Label>
-                      <Select value={productForm.type || 'pronta-entrega'} onValueChange={(val) => setProductForm({...productForm, type: val as any})}>
-                        <SelectTrigger id="type">
-                          <SelectValue>{(v: string) => (v === 'encomenda' ? 'Sob encomenda' : 'Pronta entrega')}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pronta-entrega">Pronta Entrega</SelectItem>
-                          <SelectItem value="encomenda">Por Encomenda</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <Dialog open={isProductDialogOpen} onOpenChange={(open) => { setIsProductDialogOpen(open); if (!open) setConfirmDeleteId(null); }}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle>{editingProduct ? 'Editar produto' : 'Novo produto'}</DialogTitle>
+                <DialogDescription>As mudanças aparecem no cardápio assim que você salvar.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
+                    {productForm.image
+                      ? <img src={productForm.image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      : <ImageOff className="h-6 w-6 text-slate-300" />}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="relative inline-flex cursor-pointer">
+                      <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-slate-50">Trocar foto</span>
+                      <input type="file" accept="image/*" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => handleImageUpload(e, (base64) => setProductForm(f => ({ ...f, image: base64 })))} />
+                    </label>
+                    {productForm.image && (
+                      <button type="button" className="text-left text-xs text-red-500 hover:underline" onClick={() => setProductForm(f => ({ ...f, image: '' }))}>Remover foto</button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="prod-name">Nome</Label>
+                  <Input id="prod-name" value={productForm.name || ''} onChange={(e) => setProductForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="prod-price">Preço (R$)</Label>
+                    <Input id="prod-price" type="number" inputMode="decimal" step="0.01" min="0" value={productForm.price ?? ''} onChange={(e) => setProductForm(f => ({ ...f, price: e.target.value === '' ? undefined : parseFloat(e.target.value) }))} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="category">Categoria</Label>
-                    <Select value={productForm.categoryId || ''} onValueChange={(val) => setProductForm({...productForm, categoryId: val})}>
-                      <SelectTrigger id="category">
-                        <SelectValue placeholder="Selecione...">{(v: string) => categories.find(c => c.id === v)?.name ?? 'Selecione...'}</SelectValue>
+                    <Label htmlFor="prod-category">Categoria</Label>
+                    <Select value={productForm.categoryId || ''} onValueChange={(val) => setProductForm(f => ({ ...f, categoryId: val as string }))}>
+                      <SelectTrigger id="prod-category">
+                        <SelectValue placeholder="Escolha...">{(v: string) => categories.find(c => c.id === v)?.name ?? 'Escolha...'}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {categories.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
+                        {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="prod-desc">Descrição</Label>
+                  <Textarea id="prod-desc" rows={3} value={productForm.description || ''} onChange={(e) => setProductForm(f => ({ ...f, description: e.target.value }))} />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="prod-ingredients">Ingredientes (separados por vírgula)</Label>
+                  <Input id="prod-ingredients" placeholder="Frango, Batata doce, Brócolis" value={(productForm.ingredients || []).join(', ')} onChange={(e) => setProductForm(f => ({ ...f, ingredients: e.target.value.split(',') }))} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="prod-type">Tipo</Label>
+                    <Select value={productForm.type || 'pronta-entrega'} onValueChange={(val) => setProductForm(f => ({ ...f, type: val as Product['type'] }))}>
+                      <SelectTrigger id="prod-type">
+                        <SelectValue>{(v: string) => (v === 'encomenda' ? 'Sob encomenda' : 'Pronta entrega')}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pronta-entrega">Pronta entrega</SelectItem>
+                        <SelectItem value="encomenda">Sob encomenda</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="tags">Tags (separadas por vírgula)</Label>
-                    <Input 
-                      id="tags" 
-                      placeholder="ex: fit, sem glúten, low carb" 
-                      value={productForm.tags?.join(', ') || ''} 
-                      onChange={(e) => setProductForm({...productForm, tags: e.target.value.split(',').map(t => t.trim())})} 
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="desc">Descrição</Label>
-                    <Textarea id="desc" value={productForm.description} onChange={(e) => setProductForm({...productForm, description: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="image">URL da Imagem (Opcional)</Label>
-                    <div className="flex gap-2">
-                      <Input id="image" value={productForm.image} onChange={(e) => setProductForm({...productForm, image: e.target.value})} placeholder="https://..." />
-                      <div className="relative">
-                        <Input 
-                          type="file" 
-                          accept="image/*" 
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full" 
-                          onChange={(e) => handleImageUpload(e, (base64) => setProductForm({...productForm, image: base64}))}
-                        />
-                        <Button type="button" variant="outline" size="sm">Upload</Button>
-                      </div>
-                    </div>
+                    <Label htmlFor="prod-tags">Etiquetas</Label>
+                    <Input id="prod-tags" placeholder="novidade, low carb" value={(productForm.tags || []).join(', ')} onChange={(e) => setProductForm(f => ({ ...f, tags: e.target.value.split(',') }))} />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Cancelar</Button>
-                  <Button className="bg-green-600 hover:bg-green-700" onClick={handleSaveProduct}>Salvar</Button>
+
+                <label className="flex items-center justify-between rounded-xl border p-3">
+                  <span>
+                    <span className="block text-sm font-medium">Mostrar no cardápio</span>
+                    <span className="block text-xs text-slate-500">Desligue quando acabar o estoque</span>
+                  </span>
+                  <Switch checked={productForm.available ?? true} onCheckedChange={(v) => setProductForm(f => ({ ...f, available: v }))} />
+                </label>
+
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-slate-500">Usar link de imagem</summary>
+                  <Input className="mt-2" placeholder="https://..." value={productForm.image?.startsWith('data:') ? '' : (productForm.image || '')} onChange={(e) => setProductForm(f => ({ ...f, image: e.target.value }))} />
+                </details>
+              </div>
+
+              {confirmDeleteId && editingProduct ? (
+                <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm text-red-800">Apagar <strong>{editingProduct.name}</strong> de vez? Para só tirar do cardápio, use "Mostrar no cardápio".</p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Voltar</Button>
+                    <Button variant="destructive" onClick={() => handleDeleteProduct(editingProduct.id)}>Apagar produto</Button>
+                  </div>
+                </div>
+              ) : (
+                <DialogFooter className="gap-2 sm:justify-between">
+                  {editingProduct ? (
+                    <Button variant="ghost" className="text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => setConfirmDeleteId(editingProduct.id)}>
+                      <Trash2 className="mr-1 h-4 w-4" /> Apagar
+                    </Button>
+                  ) : <span />}
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Cancelar</Button>
+                    <Button className="bg-green-600 hover:bg-green-700" onClick={handleSaveProduct}>Salvar</Button>
+                  </div>
                 </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-        <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produto</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Preço</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 overflow-hidden rounded bg-slate-100">
-                            <img src={product.image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                          </div>
-                          <span className="font-medium">{product.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{categories.find(c => c.id === product.categoryId)?.name}</TableCell>
-                      <TableCell>{product.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                      <TableCell>
-                        {product.available ? <Badge className="bg-green-100 text-green-700 border-green-200">Disponível</Badge> : <Badge variant="destructive">Indisponível</Badge>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => {
-                            setEditingProduct(product);
-                            setProductForm(product);
-                            setIsProductDialogOpen(true);
-                          }}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDeleteProduct(product.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Promotions Tab */}
