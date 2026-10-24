@@ -487,11 +487,7 @@ export default function CustomerMenu({
                 {profile.profilePicture ? (
                   <img src={profile.profilePicture} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="flex items-baseline font-black text-2xl md:text-4xl tracking-tighter select-none">
-                    <span className="text-green-600">lev</span>
-                    <span className="text-slate-900 text-lg md:text-2xl mx-0.5">&</span>
-                    <span className="text-slate-900">fit</span>
-                  </div>
+                  <img src="/perfil.jpg" alt="Lev & Fit" className="w-full h-full object-cover" />
                 )}
               </div>
             </div>

@@ -11,7 +11,7 @@ import CustomerMenu from './components/CustomerMenu';
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } from './constants';
-import { Leaf, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { normalizePhone } from './lib/phone';
 import { toast } from 'sonner';
@@ -433,9 +433,8 @@ export default function App() {
         <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
             <div className="flex-1 md:flex-none flex justify-center md:justify-start">
-              <Link to="/" className="flex items-center gap-2 font-bold text-xl text-green-600">
-                <Leaf className="h-6 w-6" />
-                <span>lev <span className="text-slate-900">& fit</span></span>
+              <Link to="/" className="flex items-center" aria-label="Lev & Fit - início">
+                <img src="/logo.png" alt="Lev & Fit" className="h-12 w-auto" />
               </Link>
             </div>
             <nav className="flex items-center gap-4 absolute right-4 md:relative md:right-0">

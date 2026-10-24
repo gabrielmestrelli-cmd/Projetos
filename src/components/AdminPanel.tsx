@@ -193,8 +193,8 @@ export default function AdminPanel({
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden">
           <CardHeader className="bg-green-600 text-white p-8 text-center">
-            <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CookingPot className="w-8 h-8" />
+            <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <img src="/logo-icone.png" alt="Lev & Fit" className="w-12 h-12 object-contain" />
             </div>
             <CardTitle className="text-2xl font-bold">Painel de Controle</CardTitle>
             <CardDescription className="text-white/80">Acesso restrito para administração</CardDescription>
@@ -583,11 +583,7 @@ export default function AdminPanel({
                     {profileForm.profilePicture ? (
                       <img src={profileForm.profilePicture} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="flex items-baseline font-black text-2xl tracking-tighter select-none">
-                        <span className="text-green-600">L</span>
-                        <span className="text-slate-900 text-lg mx-0.5">&</span>
-                        <span className="text-slate-900">F</span>
-                      </div>
+                      <img src="/perfil.jpg" alt="Logo padrão" className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex-1 space-y-2">
