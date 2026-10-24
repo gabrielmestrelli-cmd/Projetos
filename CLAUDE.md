@@ -98,6 +98,6 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 
 ## 8. Publicação
 
-- No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, hoje `quick-oasis-3hgp2ca`).
+- No ar em **https://levfit-congelados.vercel.app** (conta Vercel `bobmendes`; o domínio aponta para o projeto mais recente, hoje `racing-gust-kzxj11i`).
 - O site é estático: `npm run build` gera `dist/`, que é enviado com `vercel deploy dist --prod` (precisa `vercel login`). As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
