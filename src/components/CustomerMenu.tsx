@@ -514,12 +514,12 @@ export default function CustomerMenu({
   );
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-24 sm:rounded-2xl sm:shadow-sm sm:ring-1 sm:ring-slate-100">
       {/* Endereço de entrega sempre à vista (como nos apps de delivery) */}
       <button
         type="button"
         onClick={() => setIsFeeOpen(true)}
-        className="flex w-full items-center gap-3 border-b border-amber-100 bg-amber-50/70 px-4 py-2.5 text-left transition-colors hover:bg-amber-50 md:rounded-t-xl"
+        className="flex w-full items-center gap-3 border-b border-amber-100 bg-amber-50/70 px-4 py-2.5 text-left transition-colors hover:bg-amber-50 sm:rounded-t-2xl sm:px-6"
       >
         <MapPin className="h-5 w-5 shrink-0 text-slate-700" />
         <span className="min-w-0 flex-1">
@@ -569,7 +569,7 @@ export default function CustomerMenu({
         </div>
       </div>
 
-      <div className="px-4 pt-4 md:pt-8 max-w-4xl mx-auto">
+      <div className="px-4 pt-4 md:px-8 md:pt-6">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-12 mb-6 text-center md:text-left">
           <div className="relative flex-shrink-0">
             <button
@@ -693,7 +693,7 @@ export default function CustomerMenu({
 
 
             {/* Status + calcular entrega */}
-            <div className="mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-4 md:px-8">
               {profile.isOpen ? (
                 <span className="flex items-center gap-1.5 font-bold text-green-600">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-green-600" />
@@ -716,7 +716,7 @@ export default function CustomerMenu({
       {/* Stories Style Categories */}
       {/* Até 6 bolinhas cabem inteiras na tela do celular; com mais, a fileira rola */}
       <div
-        className={`${categories.length + 1 <= 6 ? 'grid gap-1 px-2 sm:flex sm:gap-4 sm:px-4' : 'flex gap-3 overflow-x-auto px-4 scrollbar-hide'} py-5 sm:py-6 border-b border-slate-100`}
+        className={`${categories.length + 1 <= 6 ? 'grid gap-1 px-2 sm:flex sm:justify-center sm:gap-6 sm:px-4' : 'flex gap-3 overflow-x-auto px-4 scrollbar-hide'} py-5 sm:py-6 border-b border-slate-100`}
         style={categories.length + 1 <= 6 ? { gridTemplateColumns: `repeat(${categories.length + 1}, minmax(0, 1fr))` } : undefined}
       >
         <button
@@ -808,17 +808,17 @@ export default function CustomerMenu({
       </div>
 
       {/* Products Display */}
-      <div className="max-w-xl mx-auto md:py-4">
+      <div className="md:px-4 md:py-4">
         <AnimatePresence>
           {viewMode === 'feed' ? (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 md:grid md:grid-cols-2 md:gap-x-4 md:divide-y-0">
               {filteredProducts.map((product) => (
                 <motion.div
                   key={product.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white p-4 flex gap-4 items-start hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="bg-white p-4 flex gap-4 items-start hover:bg-slate-50 transition-colors cursor-pointer md:border-b md:border-slate-100"
                 >
                   <div className="flex-1 space-y-3" onClick={() => setSelectedProduct(product)}>
                     <div className="space-y-1">
@@ -877,7 +877,7 @@ export default function CustomerMenu({
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-0.5 p-0.5">
+            <div className="grid grid-cols-3 gap-0.5 p-0.5 md:grid-cols-4 md:gap-1">
               {filteredProducts.map((product) => (
                 <motion.div
                   key={product.id}
@@ -930,7 +930,7 @@ export default function CustomerMenu({
             </div>
             {/* Avaliações reais do Google */}
             {reviews.length > 0 && (
-              <section id="avaliacoes" className="mx-auto mt-6 max-w-4xl scroll-mt-20 border-t border-slate-100 px-4 py-10" aria-labelledby="avaliacoes-titulo">
+              <section id="avaliacoes" className="mt-6 scroll-mt-20 border-t border-slate-100 px-4 py-10 md:px-8" aria-labelledby="avaliacoes-titulo">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div className="space-y-1">
                     <h2 id="avaliacoes-titulo" className="text-xl font-bold text-slate-900">O que os clientes dizem</h2>
@@ -959,11 +959,12 @@ export default function CustomerMenu({
                   {reviews.map(r => (
                     <article key={r.id} className="flex w-[280px] shrink-0 snap-start flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                       <div className="flex items-center gap-3">
-                        {r.avatar ? (
-                          <img src={r.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
-                        ) : (
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 font-bold text-green-700">{r.name.charAt(0).toUpperCase()}</span>
-                        )}
+                        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 font-bold text-green-700">
+                          {r.name.charAt(0).toUpperCase()}
+                          {r.avatar && (
+                            <img src={r.avatar} alt="" className="absolute inset-0 h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                          )}
+                        </span>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-900">{r.name}</p>
                           <span className="flex text-amber-400" aria-label={`${r.rating} de 5 estrelas`}>

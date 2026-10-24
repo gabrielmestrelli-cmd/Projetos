@@ -465,7 +465,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 font-sans">
         <PromoBar />
         <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
-          <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
             <div className="flex-1 md:flex-none flex justify-center md:justify-start">
               <Link to="/" className="flex items-center" aria-label="Lev & Fit - início">
                 <img src="/logo.png" alt="Lev & Fit" className="h-12 w-auto" />
@@ -479,11 +479,12 @@ export default function App() {
           </div>
         </header>
 
-        <main className="container mx-auto py-6 px-4">
+        <main className="w-full">
           <Routes>
             <Route 
               path="/" 
-              element={
+ element={
+                <div className="mx-auto w-full max-w-4xl sm:px-4 sm:py-6">
                 <CustomerMenu 
                   categories={categories} 
                   products={products} 
@@ -495,13 +496,15 @@ export default function App() {
                   userPhone={userPhone}
                   onLogin={handleLogin}
                   onLogout={handleLogout}
-                  onPlaceOrder={addOrder} 
+ onPlaceOrder={addOrder} 
                 />
+                </div>
               } 
             />
             <Route 
               path="/admin/*" 
               element={
+                <div className="container mx-auto px-4 py-6">
                 <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center text-slate-400">Carregando painel...</div>}>
                 <AdminPanel 
                   categories={categories} 
@@ -519,6 +522,7 @@ export default function App() {
                   onRefreshAll={refreshAll}
                 />
                 </Suspense>
+                </div>
               } 
             />
           </Routes>
