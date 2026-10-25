@@ -700,7 +700,7 @@ export const INITIAL_PROFILE: BusinessProfile = {
   name: 'Lev & Fit 🌿',
   instagram: 'levfitcongelados',
   phone: '5548984968098',
-  bio: 'Marmitas congeladas saudáveis 🥗\n↠ Pedidos por direct ou WhatsApp\n↠ Todas as opções podem ser feitas sem lactose\n📍 Grande Florianópolis • 🏠 Retirada no local',
+  bio: 'Marmitas congeladas saudáveis 🥗\n↠ Pedidos por direct ou WhatsApp\n↠ Várias opções sem lactose\n📍 Grande Florianópolis • 🛵 Entrega',
   stats: {
     posts: 66,
     followers: '2.542',

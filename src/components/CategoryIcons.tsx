@@ -85,8 +85,18 @@ const Caldos = () => (
   </svg>
 );
 
+// Mais pedidas: estrela dourada com coração
+const MaisPedidas = () => (
+  <svg viewBox="0 0 64 64" className="h-full w-full" aria-hidden="true">
+    <circle cx="32" cy="34" r="22" fill="#FEF3C7" />
+    <path d="M32 9 L38.5 22.5 L53 24.6 L42.5 34.8 L45 49.3 L32 42.4 L19 49.3 L21.5 34.8 L11 24.6 L25.5 22.5 Z" fill="#F5B82E" stroke="#E09A12" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M32 38 C27 34 25 31 25 28.5 C25 26.3 26.8 24.8 28.7 24.8 C30.1 24.8 31.3 25.6 32 26.8 C32.7 25.6 33.9 24.8 35.3 24.8 C37.2 24.8 39 26.3 39 28.5 C39 31 37 34 32 38 Z" fill="#E2573B" />
+  </svg>
+);
+
 const BY_ID: Record<string, () => ReactElement> = {
   all: Todos,
+  'mais-pedidas': MaisPedidas,
   marmitas: Tradicionais,
   lasanhas: Lasanhas,
   coxinhas: Salgados,

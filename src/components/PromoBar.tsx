@@ -6,7 +6,8 @@ import { PRICING, formatBRL } from '../lib/pricing';
 const MESSAGES = [
   `10 marmitas ou caldos por ${formatBRL(PRICING.marmitaTiers.find(t => t.min === 10)!.unitPrice * 10)} • 15 por ${formatBRL(PRICING.marmitaTiers.find(t => t.min === 15)!.unitPrice * 15)}`,
   `${PRICING.coxinhaCombo.qty} salgados (coxinha ou kibe) por ${formatBRL(PRICING.coxinhaCombo.price)}`,
-  'Todas as opções podem ser feitas sem lactose',
+  `Primeiro pedido? ${PRICING.firstOrderCoupon.percent}% OFF com o cupom ${PRICING.firstOrderCoupon.code}`,
+  'Muitas opções sem lactose',
 ];
 
 export function PromoBar() {

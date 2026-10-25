@@ -1121,7 +1121,8 @@ export default function AdminPanel({
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="prod-tags">Etiquetas</Label>
-                    <Input id="prod-tags" placeholder="novidade, low carb" value={(productForm.tags || []).join(', ')} onChange={(e) => setProductForm(f => ({ ...f, tags: e.target.value.split(',') }))} />
+                    <Input id="prod-tags" placeholder="mais pedida, só sem lactose, só com lactose, novidade" value={(productForm.tags || []).join(', ')} onChange={(e) => setProductForm(f => ({ ...f, tags: e.target.value.split(',') }))} />
+                    <p className="text-xs text-slate-500">Separe por vírgula. <b>mais pedida</b> = aparece em "Mais pedidas"; <b>só sem lactose</b> / <b>só com lactose</b> = tira a escolha de lactose do prato.</p>
                   </div>
                 </div>
 

@@ -7,6 +7,8 @@ export const PRICING = {
     { min: 10, unitPrice: 20 },
   ],
   coxinhaCombo: { qty: 3, price: 24 },
+  /** Cupom do primeiro pedido (vale só para WhatsApp que nunca fez pedido). Desconto sobre os produtos, não sobre a entrega. */
+  firstOrderCoupon: { code: 'PRIMEIRO5', percent: 5 },
 };
 
 /** Entra no combo de 10/15 unidades: marmitas tradicionais e caldos/sopas (mesma tabela no cardápio do Instagram). */
@@ -30,6 +32,8 @@ export interface CartSummary {
   total: number;
   marmitaCount: number;
   coxinhaCount: number;
+  /** Parte do desconto que veio do cupom */
+  couponDiscount: number;
   /** Preço da marmita com desconto (null = sem desconto ainda) */
   marmitaTierPrice: number | null;
   /** Quantas marmitas faltam para o próximo desconto */
@@ -39,7 +43,7 @@ export interface CartSummary {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function summarizeCart(cart: OrderItem[], products: Product[], deliveryFee = 0): CartSummary {
+export function summarizeCart(cart: OrderItem[], products: Product[], deliveryFee = 0, couponPercent = 0): CartSummary {
   const withCategory = cart.map(item => ({
     ...item,
     categoryId: products.find(p => p.id === item.productId)?.categoryId,
@@ -82,11 +86,15 @@ export function summarizeCart(cart: OrderItem[], products: Product[], deliveryFe
 
   subtotal = round2(subtotal);
   discount = round2(discount);
+  // Cupom: % em cima do valor dos produtos já com os combos
+  const couponDiscount = couponPercent > 0 ? round2((subtotal - discount) * couponPercent / 100) : 0;
+  discount = round2(discount + couponDiscount);
   const fee = cart.length > 0 ? round2(deliveryFee) : 0;
 
   return {
     subtotal,
     discount,
+    couponDiscount,
     deliveryFee: fee,
     total: round2(subtotal - discount + fee),
     marmitaCount,

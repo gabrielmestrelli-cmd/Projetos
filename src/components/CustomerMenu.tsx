@@ -17,9 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeCart, isMarmita, isCoxinha, hasGlutenOption, formatBRL, PRICING } from '../lib/pricing';
+import { lactoseRule, fixedLactoseNote, LACTOSE_INFO, isMaisPedida, MAIS_PEDIDAS_ID } from '../lib/opcoes';
 import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/phone';
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
+import { supabase } from '../lib/supabase';
 import { DEFAULT_DELIVERY, feeFor, formatKm, mapLink } from '../lib/delivery';
 import { StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { CategoryArt } from './CategoryIcons';
@@ -73,9 +75,12 @@ export default function CustomerMenu({
   // Checkout fields
   const [customerName, setCustomerName] = useState(localStorage.getItem('customer_name') || '');
   const [customerPhone, setCustomerPhone] = useState(maskPhone(userPhone || ''));
-  const [deliveryType, setDeliveryType] = useState<'entrega' | 'retirada'>(
-    (localStorage.getItem('delivery_type') as 'entrega' | 'retirada') || 'entrega'
-  );
+  // Só entrega (a loja tirou a retirada no local)
+  const [deliveryType] = useState<'entrega' | 'retirada'>('entrega');
+  // Cupom do primeiro pedido
+  const [couponInput, setCouponInput] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [couponChecking, setCouponChecking] = useState(false);
   const [addressFields, setAddressFields] = useState<AddressFields>(() => loadSavedAddress());
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,7 +138,11 @@ export default function CustomerMenu({
   /** Peso escrito na descrição (ex.: "350g"), para o selo do prato */
   const weightOf = (product: Product) => product.description.match(/\b(\d{2,4})\s?(g|kg|ml|l)\b/i)?.[0].replace(/\s/, '') ?? null;
 
-  const hasOptions = (product: Product) => hasGlutenOption(product) || product.categoryId === 'marmitas';
+  const hasOptions = (product: Product) => hasGlutenOption(product) || lactoseRule(product) === 'escolha';
+  const quickAdd = (product: Product) => {
+    if (hasOptions(product)) setSelectedProduct(product);
+    else addToCart(product, 1, fixedLactoseNote(lactoseRule(product)));
+  };
 
   const stories = useMemo(() => orderStories(promotions), [promotions]);
 
@@ -156,17 +165,21 @@ export default function CustomerMenu({
     const i = INITIAL_PRODUCTS.findIndex(p => p.id === id);
     return i === -1 ? 9999 : i;
   };
+  const hasMaisPedidas = products.some(p => p.available && isMaisPedida(p));
   const orderedCategories = useMemo(
-    () => [...categories].sort((a, b) => rankOf(a.id) - rankOf(b.id)),
+    () => [
+      ...(hasMaisPedidas ? [{ id: MAIS_PEDIDAS_ID, name: 'Mais pedidas', icon: '', emoji: '', image: '' }] : []),
+      ...[...categories].sort((a, b) => rankOf(a.id) - rankOf(b.id)),
+    ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [categories],
+    [categories, hasMaisPedidas],
   );
 
   const filteredProducts = useMemo(() => {
     const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const q = norm(searchQuery.trim());
     return products.filter(p => {
-      const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
+      const matchesCategory = selectedCategory === 'all' || (selectedCategory === MAIS_PEDIDAS_ID ? isMaisPedida(p) : p.categoryId === selectedCategory);
       const matchesSearch = !q || norm(p.name).includes(q) || norm(p.description).includes(q);
       return matchesCategory && matchesSearch && p.available;
     }).sort((a, b) =>
@@ -178,10 +191,19 @@ export default function CustomerMenu({
 
   // Em "Todos" (sem busca), um título separa cada categoria ao rolar a lista
   const showSections = selectedCategory === 'all' && !searchQuery.trim();
-  const sectionHeader = (product: Product, idx: number, mode: 'feed' | 'grid') => {
+  const maisPedidas = useMemo(() => filteredProducts.filter(isMaisPedida), [filteredProducts]);
+  // Em "Todos", as mais pedidas aparecem primeiro (e de novo na categoria delas)
+  const displayItems = useMemo(
+    () => [
+      ...(showSections ? maisPedidas.map(product => ({ product, section: MAIS_PEDIDAS_ID })) : []),
+      ...filteredProducts.map(product => ({ product, section: product.categoryId })),
+    ],
+    [showSections, maisPedidas, filteredProducts],
+  );
+  const sectionHeader = (section: string, idx: number, mode: 'feed' | 'grid') => {
     if (!showSections) return null;
-    if (idx > 0 && filteredProducts[idx - 1].categoryId === product.categoryId) return null;
-    const cat = categories.find(c => c.id === product.categoryId);
+    if (idx > 0 && displayItems[idx - 1].section === section) return null;
+    const cat = section === MAIS_PEDIDAS_ID ? { id: MAIS_PEDIDAS_ID, name: 'Mais pedidas' } : categories.find(c => c.id === section);
     if (!cat) return null;
     return (
       <div
@@ -276,8 +298,44 @@ export default function CustomerMenu({
   // Taxa "a combinar" quando é por km e ainda não deu pra calcular
   const feeUnknown = deliverySettings.mode === 'per_km' && quote.status !== 'ok';
   const deliveryFee = deliveryType === 'entrega' && !feeUnknown && !feeResult.outOfRange ? feeResult.fee : 0;
-  const summary = summarizeCart(cart, products, deliveryFee);
-  const { subtotal, discount, total, marmitaCount, coxinhaCount } = summary;
+  const coupon = PRICING.firstOrderCoupon;
+  const summary = summarizeCart(cart, products, deliveryFee, couponApplied ? coupon.percent : 0);
+  const { subtotal, discount, total, marmitaCount, coxinhaCount, couponDiscount } = summary;
+
+  /** O cupom só vale para quem nunca fez pedido (pedidos cancelados não contam) */
+  const isFirstOrder = async (phone: string) => {
+    const { data, error } = await supabase.rpc('pedidos_do_cliente', { telefone: phone });
+    if (error || !Array.isArray(data)) return null;
+    return !data.some((o: { status?: string }) => o.status !== 'cancelled');
+  };
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    if (code !== coupon.code) {
+      toast.error('Cupom inválido', { description: `Use ${coupon.code} no seu primeiro pedido.` });
+      return;
+    }
+    if (!isValidPhone(customerPhone)) {
+      toast.error('Preencha seu WhatsApp primeiro', { description: 'O cupom vale para o primeiro pedido de cada número.' });
+      return;
+    }
+    setCouponChecking(true);
+    const first = await isFirstOrder(normalizePhone(customerPhone));
+    setCouponChecking(false);
+    if (first === false) {
+      toast.error('Esse cupom é só para o primeiro pedido', { description: 'Esse WhatsApp já fez pedido com a gente. 💚' });
+      return;
+    }
+    setCouponApplied(true);
+    toast.success(`Cupom ${coupon.code} aplicado: ${coupon.percent}% de desconto!`);
+  };
+
+  // Trocou o WhatsApp: o cupom precisa ser conferido de novo
+  useEffect(() => { setCouponApplied(false); }, [customerPhone]);
+
+  const kibe = products.find(p => p.available && isCoxinha(p) && !hasGlutenOption(p));
+  const coxinha = products.find(p => p.available && hasGlutenOption(p));
 
   const unitPriceLabel = (item: OrderItem) => {
     const product = products.find(p => p.id === item.productId);
@@ -313,11 +371,17 @@ export default function CustomerMenu({
       return;
     }
     if (deliveryType === 'entrega' && feeResult.outOfRange) {
-      toast.error('Esse endereço fica fora da área de entrega', { description: 'Escolha retirar no local ou chame a gente no WhatsApp.' });
+      toast.error('Esse endereço fica fora da área de entrega', { description: 'Chame a gente no WhatsApp para combinar.' });
       return;
     }
     if (deliveryType === 'entrega' && quote.status === 'loading') {
       toast.info('Calculando a entrega, só um instante…');
+      return;
+    }
+
+    if (couponApplied && (await isFirstOrder(normalizePhone(customerPhone))) === false) {
+      setCouponApplied(false);
+      toast.error('O cupom é só para o primeiro pedido', { description: 'Tiramos o desconto do cupom. Confira o total e envie de novo.' });
       return;
     }
 
@@ -366,7 +430,8 @@ export default function CustomerMenu({
       ...cart.map(item => `• ${item.quantity}x ${item.name}${item.notes ? ` _(${item.notes})_` : ''}`),
       line,
       `Subtotal: ${formatBRL(subtotal)}`,
-      discount > 0 ? `Desconto: -${formatBRL(discount)}` : '',
+      discount - couponDiscount > 0 ? `Desconto: -${formatBRL(discount - couponDiscount)}` : '',
+      couponDiscount > 0 ? `Cupom ${coupon.code} (${coupon.percent}%): -${formatBRL(couponDiscount)}` : '',
       deliveryType === 'entrega'
         ? (deliveryFee > 0 ? `Taxa de entrega: ${formatBRL(deliveryFee)}` : 'Taxa de entrega: a combinar')
         : '',
@@ -464,6 +529,25 @@ export default function CustomerMenu({
           </div>
         )}
 
+        {cart.length > 0 && coxinhaCount === 0 && (kibe || coxinha) && (
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3">
+            <p className="text-sm font-bold text-orange-900">Que tal uns salgados? 🥟</p>
+            <p className="text-xs text-orange-800">Coxinha ou kibe: {PRICING.coxinhaCombo.qty} por {formatBRL(PRICING.coxinhaCombo.price)}</p>
+            <div className="mt-2 flex gap-2">
+              {coxinha && (
+                <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl border-orange-200 bg-white font-bold text-orange-700" onClick={() => setSelectedProduct(coxinha)}>
+                  <Plus className="mr-1 h-4 w-4" /> Coxinha
+                </Button>
+              )}
+              {kibe && (
+                <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl border-orange-200 bg-white font-bold text-orange-700" onClick={() => addToCart(kibe)}>
+                  <Plus className="mr-1 h-4 w-4" /> Kibe
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
           <h3 className="font-bold text-slate-900">Seus dados</h3>
           <div className="space-y-1.5">
@@ -477,19 +561,10 @@ export default function CustomerMenu({
         </div>
 
         <div className="space-y-3">
-          <h3 className="font-bold text-slate-900">Como quer receber?</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant={deliveryType === 'entrega' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'entrega' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('entrega')}>
-              <Bike className="h-5 w-5" />
-              <span className="text-xs font-bold">
-                Entrega{deliverySettings.mode === 'fixed' ? (deliverySettings.baseFee > 0 ? ` • ${formatBRL(deliverySettings.baseFee)}` : '') : ' • por km'}
-              </span>
-            </Button>
-            <Button variant={deliveryType === 'retirada' ? 'default' : 'outline'} className={`h-16 flex-col gap-1 rounded-2xl ${deliveryType === 'retirada' ? 'bg-green-600 hover:bg-green-700' : 'bg-white'}`} onClick={() => setDeliveryType('retirada')}>
-              <Store className="h-5 w-5" />
-              <span className="text-xs font-bold">Retirar no local</span>
-            </Button>
-          </div>
+          <h3 className="flex items-center gap-2 font-bold text-slate-900">
+            <Bike className="h-5 w-5 text-green-600" />
+            Entrega
+          </h3>
           {deliveryType === 'entrega' ? (
             <div className="space-y-3">
               <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="checkout" />
@@ -517,6 +592,23 @@ export default function CustomerMenu({
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="checkout-coupon" className="text-xs font-bold uppercase text-slate-500">Cupom de desconto</Label>
+          {couponApplied ? (
+            <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2.5 text-sm font-bold text-green-700">
+              <span>✅ {coupon.code}: {coupon.percent}% de desconto</span>
+              <button type="button" className="text-xs font-medium text-slate-500 underline" onClick={() => { setCouponApplied(false); setCouponInput(''); }}>remover</button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input id="checkout-coupon" placeholder={`Primeiro pedido? Use ${coupon.code}`} className="h-11 rounded-xl border-none bg-slate-50 uppercase placeholder:normal-case" value={couponInput} onChange={e => setCouponInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyCoupon(); }} />
+              <Button variant="outline" className="h-11 rounded-xl font-bold" disabled={couponChecking || !couponInput.trim()} onClick={applyCoupon}>
+                {couponChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Aplicar'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="checkout-notes" className="text-xs font-bold uppercase text-slate-500">Observações (opcional)</Label>
           <Textarea id="checkout-notes" rows={2} placeholder="Ex.: troco para R$ 100, portão azul, sem cebola..." className="rounded-xl border-none bg-slate-50" value={orderNotes} onChange={e => setOrderNotes(e.target.value)} />
         </div>
@@ -525,8 +617,11 @@ export default function CustomerMenu({
       <div className="space-y-3 border-t border-slate-100 bg-white px-6 pt-4 pb-6">
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="tabular-nums">{formatBRL(subtotal)}</span></div>
-          {discount > 0 && (
-            <div className="flex justify-between font-bold text-green-600"><span>Descontos</span><span className="tabular-nums">- {formatBRL(discount)}</span></div>
+          {discount - couponDiscount > 0 && (
+            <div className="flex justify-between font-bold text-green-600"><span>Descontos</span><span className="tabular-nums">- {formatBRL(discount - couponDiscount)}</span></div>
+          )}
+          {couponDiscount > 0 && (
+            <div className="flex justify-between font-bold text-green-600"><span>Cupom {coupon.code} ({coupon.percent}%)</span><span className="tabular-nums">- {formatBRL(couponDiscount)}</span></div>
           )}
           {deliveryType === 'entrega' && (
             <div className="flex justify-between text-slate-500">
@@ -753,23 +848,23 @@ export default function CustomerMenu({
             </div>
 
       {/* Stories Style Categories */}
-      {/* Até 6 bolinhas cabem inteiras na tela do celular; com mais, a fileira rola */}
+      {/* Até 7 bolinhas cabem inteiras na tela do celular; com mais, a fileira rola */}
       <div
-        className={`${categories.length + 1 <= 6 ? 'grid gap-1 px-2 sm:flex sm:justify-center sm:gap-6 sm:px-4' : 'flex gap-3 overflow-x-auto px-4 scrollbar-hide'} py-5 sm:py-6 border-b border-slate-100`}
-        style={categories.length + 1 <= 6 ? { gridTemplateColumns: `repeat(${categories.length + 1}, minmax(0, 1fr))` } : undefined}
+        className={`${orderedCategories.length + 1 <= 7 ? 'grid gap-0.5 px-1.5 sm:flex sm:justify-center sm:gap-6 sm:px-4' : 'flex gap-3 overflow-x-auto px-4 scrollbar-hide'} py-5 sm:py-6 border-b border-slate-100`}
+        style={orderedCategories.length + 1 <= 7 ? { gridTemplateColumns: `repeat(${orderedCategories.length + 1}, minmax(0, 1fr))` } : undefined}
       >
         <button
           onClick={() => setSelectedCategory('all')}
           className="flex min-w-0 flex-col items-center gap-1.5 flex-shrink-0 group"
         >
-          <div className={`w-[52px] h-[52px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
+          <div className={`w-[46px] h-[46px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === 'all' ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
             <div className="w-full h-full rounded-full bg-white p-0.5">
               <div className={`h-full w-full rounded-full p-1.5 sm:p-2 ${selectedCategory === 'all' ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                 <CategoryArt id="all" />
               </div>
             </div>
           </div>
-          <span className={`w-full text-center text-[10px] sm:text-[11px] leading-tight transition-all ${selectedCategory === 'all' ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
+          <span className={`w-full text-center text-[9px] tracking-tight sm:text-[11px] sm:tracking-normal leading-tight transition-all ${selectedCategory === 'all' ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
             TODOS
           </span>
         </button>
@@ -781,7 +876,7 @@ export default function CustomerMenu({
               onClick={() => setSelectedCategory(cat.id)}
               className="flex min-w-0 flex-col items-center gap-1.5 flex-shrink-0 group"
             >
-              <div className={`w-[52px] h-[52px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
+              <div className={`w-[46px] h-[46px] sm:w-16 sm:h-16 rounded-full p-[2px] ${selectedCategory === cat.id ? 'ring-2 ring-green-500' : 'border border-slate-200'} transition-all duration-300`}>
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden text-2xl ${selectedCategory === cat.id ? 'bg-green-50' : 'bg-slate-50'} transition-colors`}>
                     {CategoryArt({ id: cat.id, name: cat.name }) ? (
@@ -796,7 +891,7 @@ export default function CustomerMenu({
                   </div>
                 </div>
               </div>
-              <span className={`w-full text-center text-[10px] sm:text-[11px] leading-tight transition-all ${selectedCategory === cat.id ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
+              <span className={`w-full text-center text-[9px] tracking-tight sm:text-[11px] sm:tracking-normal leading-tight transition-all ${selectedCategory === cat.id ? 'font-black text-green-600' : 'font-medium text-slate-500'}`}>
                 {cat.name}
               </span>
             </button>
@@ -851,7 +946,7 @@ export default function CustomerMenu({
         <>
           {viewMode === 'feed' ? (
             <div className="divide-y divide-slate-100 md:grid md:grid-cols-2 md:gap-x-4 md:divide-y-0">
-              {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'feed')}
+              {displayItems.map(({ product, section }, idx) => (<Fragment key={`${section}-${product.id}`}>{sectionHeader(section, idx, 'feed')}
                 <motion.div
                   key={product.id}
                   initial={false}
@@ -878,17 +973,16 @@ export default function CustomerMenu({
                         {isNew(product) ? (
                           <Badge className="w-fit bg-purple-100 text-purple-700 border-none text-[9px] px-2 h-5 font-bold">NOVIDADE ✨</Badge>
                         ) : null}
+                        {(lactoseRule(product) === 'so-sem' || lactoseRule(product) === 'nao-contem') && (
+                          <Badge className="w-fit bg-blue-50 text-blue-700 border-none text-[9px] px-2 h-5 font-bold">SEM LACTOSE</Badge>
+                        )}
                       </div>
                       <Button 
                         size="sm"
                         className="bg-green-600 hover:bg-green-700 h-9 px-4 rounded-lg font-bold shadow-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (hasOptions(product)) {
-                            setSelectedProduct(product);
-                          } else {
-                            addToCart(product);
-                          }
+                          quickAdd(product);
                         }}
                       >
                         <Plus className="mr-1 h-4 w-4" />
@@ -915,7 +1009,7 @@ export default function CustomerMenu({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-0.5 p-0.5 md:grid-cols-4 md:gap-1">
-              {filteredProducts.map((product, idx) => (<Fragment key={product.id}>{sectionHeader(product, idx, 'grid')}
+              {displayItems.map(({ product, section }, idx) => (<Fragment key={`${section}-${product.id}`}>{sectionHeader(section, idx, 'grid')}
                 <motion.div
                   key={product.id}
                   initial={false}
@@ -932,11 +1026,7 @@ export default function CustomerMenu({
                     className="absolute bottom-1 right-1 bg-green-600 rounded-lg p-1 shadow-lg z-10"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (hasOptions(product)) {
-                        setSelectedProduct(product);
-                      } else {
-                        addToCart(product);
-                      }
+                      quickAdd(product);
                     }}
                   >
                     <Plus className="text-white w-4 h-4" />
@@ -1209,7 +1299,7 @@ export default function CustomerMenu({
           <div className="space-y-3">
             <AddressForm value={addressFields} onChange={setAddressFields} idPrefix="calc" />
             <QuoteBox settings={deliverySettings} quote={quote} />
-            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => { saveAddress(addressFields); setDeliveryType('entrega'); setIsFeeOpen(false); }}>
+            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => { saveAddress(addressFields); setIsFeeOpen(false); }}>
               Usar esse endereço no pedido
             </Button>
           </div>
@@ -1278,7 +1368,14 @@ export default function CustomerMenu({
                   </div>
                 )}
 
-                {selectedProduct.categoryId === 'marmitas' && (
+                {lactoseRule(selectedProduct) && lactoseRule(selectedProduct) !== 'escolha' && (
+                  <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2.5 text-sm font-medium text-blue-800">
+                    <Droplets className="h-4 w-4 shrink-0" />
+                    {LACTOSE_INFO[lactoseRule(selectedProduct) as 'so-sem' | 'so-com' | 'nao-contem']}
+                  </div>
+                )}
+
+                {lactoseRule(selectedProduct) === 'escolha' && (
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Droplets className="w-3 h-3" />
@@ -1374,8 +1471,10 @@ export default function CustomerMenu({
                       let notes: string | undefined = undefined;
                       if (hasGlutenOption(selectedProduct)) {
                         notes = detailGluten === 'com' ? 'Com Glúten' : 'Sem Glúten';
-                      } else if (selectedProduct.categoryId === 'marmitas') {
+                      } else if (lactoseRule(selectedProduct) === 'escolha') {
                         notes = detailLactose === 'com' ? 'Com Lactose' : 'Sem Lactose';
+                      } else {
+                        notes = fixedLactoseNote(lactoseRule(selectedProduct));
                       }
                       
                       addToCart(selectedProduct, detailQuantity, notes);
