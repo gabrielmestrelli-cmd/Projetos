@@ -145,7 +145,15 @@ export function StoryViewer({ stories, startIndex, onClose, onCta }: {
             onLoadedMetadata={e => { const d = (e.currentTarget as HTMLVideoElement).duration; if (Number.isFinite(d) && d > 0) duration.current = Math.min(d, 60) * 1000; }}
           />
         ) : (
-          <img src={story.image} alt="" className={`absolute inset-0 h-full w-full ${story.source === 'instagram' ? 'object-contain' : 'object-cover'}`} referrerPolicy="no-referrer" draggable={false} />
+          story.source === 'instagram' ? (
+            <img src={story.image} alt="" className="absolute inset-0 h-full w-full object-contain" referrerPolicy="no-referrer" draggable={false} />
+          ) : (
+            <>
+              {/* Foto da oferta inteira e nítida; o fundo é a mesma foto desfocada (não estica a foto para a tela em pé) */}
+              <img src={story.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl brightness-75" referrerPolicy="no-referrer" draggable={false} />
+              <img src={story.image} alt="" className="absolute inset-x-0 top-[14%] h-[52%] w-full object-contain drop-shadow-2xl" referrerPolicy="no-referrer" draggable={false} />
+            </>
+          )
         )}
         <div className={`absolute inset-0 bg-gradient-to-b from-black/50 via-transparent ${story.source === 'instagram' ? 'to-black/40' : 'to-black/80'}`} />
 
