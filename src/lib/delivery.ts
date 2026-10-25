@@ -103,7 +103,13 @@ export async function geocode(parts: { street?: string; number?: string; neighbo
 /** Endereço a partir das coordenadas (para o botão "usar minha localização"). */
 export async function reverseGeocode(point: LatLng): Promise<{ cep: string; street: string; number: string; neighborhood: string; city: string; state: string } | null> {
   try {
-    const r = await withTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${point.lat}&lon=${point.lng}`);
+    const url = (zoom: number) => `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=${zoom}&lat=${point.lat}&lon=${point.lng}`;
+    let r = await withTimeout(url(18));
+    // Caiu numa ciclovia/calçada/trilha? Pega a rua de carro mais próxima
+    if (r && !r.address?.house_number && /^(cycleway|footway|path|pedestrian|steps|track|bridleway|corridor)$/.test(r.type || '')) {
+      const r2 = await withTimeout(url(16)).catch(() => null);
+      if (r2?.address?.road) r = r2;
+    }
     const a = r?.address;
     if (!a) return null;
     return {
@@ -133,13 +139,26 @@ export function straightKm(a: LatLng, b: LatLng) {
 }
 
 /** Distância de carro pelas ruas (km). Se o serviço falhar, estima pela linha reta × 1,35. */
+// Guarda as rotas já calculadas (o servidor gratuito de rotas limita pedidos repetidos)
+const routeCache = new Map<string, number>();
+
 export async function drivingKm(from: LatLng, to: LatLng): Promise<{ km: number; estimated: boolean }> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
-    const res = await withTimeout(url, 8000);
-    const meters = res?.routes?.[0]?.distance;
-    if (typeof meters === 'number' && meters > 0) return { km: meters / 1000, estimated: false };
-  } catch { /* usa a estimativa */ }
+  const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)};${to.lat.toFixed(5)},${to.lng.toFixed(5)}`;
+  const cached = routeCache.get(key);
+  if (cached) return { km: cached, estimated: false };
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
+  // Tenta 2 vezes (o servidor às vezes recusa por excesso de uso); se falhar, estima pela linha reta
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await withTimeout(url, 8000);
+      const meters = res?.routes?.[0]?.distance;
+      if (typeof meters === 'number' && meters > 0) {
+        routeCache.set(key, meters / 1000);
+        return { km: meters / 1000, estimated: false };
+      }
+    } catch { /* tenta de novo */ }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 1200));
+  }
   return { km: straightKm(from, to) * 1.35, estimated: true };
 }
 

@@ -734,13 +734,13 @@ export default function CustomerMenu({
               </div>
             </button>
           </div>
-          <div className="flex-1 space-y-4 w-full">
-            <div className="flex flex-col md:flex-row md:items-center items-center gap-3 md:gap-4">
+          <div className="min-w-0 flex-1 space-y-4 w-full">
+            <div className="flex flex-col md:flex-row md:flex-wrap md:items-center items-center gap-3 md:gap-4">
               <div className="hidden md:flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-bold text-slate-900">@{profile.instagram}</h1>
                 <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-500" />
               </div>
-              <div className="flex gap-2 w-full md:w-auto justify-center md:justify-start">
+              <div className="flex flex-wrap gap-2 w-full md:w-auto justify-center md:justify-start">
                 <Button 
                   variant="default" 
                   size="sm" 

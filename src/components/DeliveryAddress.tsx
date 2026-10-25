@@ -118,9 +118,10 @@ export function AddressForm({ value, onChange, idPrefix = 'addr' }: { value: Add
 
   const [locating, setLocating] = useState(false);
   const [gpsError, setGpsError] = useState('');
-  // Mudou rua, número, CEP ou cidade na mão: o ponto do GPS deixa de valer
+  // Mudou rua, CEP ou cidade na mão: o ponto do GPS deixa de valer.
+  // O número não: depois do GPS a pessoa só completa o número da casa.
   const set = (patch: Partial<AddressFields>) => {
-    const movesPoint = ['cep', 'street', 'number', 'city'].some(k => k in patch);
+    const movesPoint = ['cep', 'street', 'city'].some(k => k in patch);
     onChange({ ...value, ...patch, ...(movesPoint ? { lat: undefined, lng: undefined } : {}) });
   };
 
