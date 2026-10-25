@@ -904,7 +904,7 @@ export default function CustomerMenu({
                     onClick={() => setSelectedProduct(product)}
                   >
                     <img 
-                      src={product.image} 
+                      src={product.image || '/perfil.jpg'} onError={(e) => { const i = e.currentTarget; if (!i.src.endsWith('/perfil.jpg')) i.src = '/perfil.jpg'; }} 
                       alt={product.name}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
@@ -923,7 +923,7 @@ export default function CustomerMenu({
                   onClick={() => setSelectedProduct(product)}
                 >
                   <img 
-                    src={product.image} 
+                    src={product.image || '/perfil.jpg'} onError={(e) => { const i = e.currentTarget; if (!i.src.endsWith('/perfil.jpg')) i.src = '/perfil.jpg'; }} 
                     alt={product.name}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
@@ -1230,7 +1230,7 @@ export default function CustomerMenu({
             <div className="flex flex-col">
               <div className="relative aspect-square sm:aspect-video overflow-hidden">
                 <img 
-                  src={selectedProduct.image} 
+                  src={selectedProduct.image || '/perfil.jpg'} onError={(e) => { const i = e.currentTarget; if (!i.src.endsWith('/perfil.jpg')) i.src = '/perfil.jpg'; }} 
                   alt={selectedProduct.name}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"

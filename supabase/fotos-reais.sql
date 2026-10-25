@@ -25,3 +25,5 @@ update public.products set image_url = '/produtos/real/real-25.jpg' where id = '
 update public.products set image_url = '/produtos/real/real-37.jpg' where id = 'cal-1';
 update public.promotions set image_url = '/produtos/real/real-19.jpg' where image_url like '/produtos/combo-10.jpg%';
 update public.promotions set image_url = '/produtos/real/real-31.jpg' where image_url like '/produtos/combo-15.jpg%';
+update public.products set image_url = '/produtos/real/real-strogonoff.jpg' where id = 'mol-5';
+update public.products set image_url = (select image_url from public.products where id = 'cal-6') where name ilike 'caldo de lentilha com calabresa' and coalesce(image_url,'') = '';

@@ -568,7 +568,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Bolonhesa',
     description: '450g. Molho bolonhesa com carne moída magra.',
     price: 25.00,
-    image: 'https://images.unsplash.com/photo-1600803907087-f56d462fd26b?q=80&w=800&auto=format&fit=crop',
+    image: '/produtos/real/real-strogonoff.jpg',
     available: true,
     type: 'encomenda',
   },
