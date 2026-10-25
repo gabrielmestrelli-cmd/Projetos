@@ -154,6 +154,15 @@ export default function AdminPanel({
   }, [profile]);
   const [prevOrdersCount, setPrevOrdersCount] = useState(orders.length);
   const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | OrderStatus>('all');
+  const visibleOrders = orders.filter(o => {
+    if (orderStatusFilter !== 'all' && (o.status || 'pending') !== orderStatusFilter) return false;
+    const q = orderSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (o.orderNumber || '').toLowerCase().includes(q)
+      || o.customerName.toLowerCase().includes(q)
+      || o.customerPhone.includes(q.replace(/\D/g, '') || '§');
+  });
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -179,7 +188,9 @@ export default function AdminPanel({
 
   // Mexeu no perfil: salva sozinho 1,5 s depois de parar de digitar
   useEffect(() => {
-    if (!isAdmin || !profileDirty) return;
+    if (!isAdmin) return;
+    // Ao abrir o painel o formulário recebe o perfil do banco; isso não é alteração
+    if (!profileDirty) { setSaveState(s => (s === 'pending' ? 'saved' : s)); return; }
     setSaveState('pending');
     const t = setTimeout(() => { saveProfileNow(); }, 1500);
     return () => clearTimeout(t);
@@ -550,9 +561,9 @@ export default function AdminPanel({
       </div>
 
       <Tabs defaultValue="orders" className="w-full min-w-0" onValueChange={setActiveTab}>
-        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="flex w-max sm:grid sm:w-full sm:grid-cols-6 lg:w-[900px]">
-            <TabsTrigger value="orders" className="flex items-center gap-2 min-w-[100px] sm:min-w-0 relative">
+        <div className="pb-2">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:grid-cols-6 lg:w-[900px]">
+            <TabsTrigger value="orders" className="relative flex items-center gap-1.5 py-2 sm:gap-2">
               <ClipboardList className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Pedidos</span>
               {orders.filter(o => o.status === 'pending').length > 0 && (
@@ -561,23 +572,23 @@ export default function AdminPanel({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+            <TabsTrigger value="products" className="flex items-center gap-1.5 py-2 sm:gap-2">
               <Package className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Produtos</span>
             </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+            <TabsTrigger value="categories" className="flex items-center gap-1.5 py-2 sm:gap-2">
               <LayoutGrid className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Categorias</span>
             </TabsTrigger>
-            <TabsTrigger value="profile" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+            <TabsTrigger value="profile" className="flex items-center gap-1.5 py-2 sm:gap-2">
               <User className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Perfil</span>
             </TabsTrigger>
-            <TabsTrigger value="promotions" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+            <TabsTrigger value="promotions" className="flex items-center gap-1.5 py-2 sm:gap-2">
               <Star className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Stories</span>
             </TabsTrigger>
-            <TabsTrigger value="testimonials" className="flex items-center gap-2 min-w-[100px] sm:min-w-0">
+            <TabsTrigger value="testimonials" className="flex items-center gap-1.5 py-2 sm:gap-2">
               <User className="h-4 w-4" />
               <span className="text-xs sm:text-sm">Feedback</span>
             </TabsTrigger>
@@ -823,13 +834,13 @@ export default function AdminPanel({
         </TabsContent>
         <TabsContent value="orders" className="mt-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Pedidos Recentes</CardTitle>
                 <CardDescription>Acompanhe e gerencie o status dos pedidos em tempo real.</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative w-48">
+                <div className="relative w-full sm:w-48">
                   <ClipboardList className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
                     placeholder="Nº, nome ou telefone" 
@@ -841,7 +852,93 @@ export default function AdminPanel({
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border">
+              {/* Filtro por status */}
+              <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+                {([['all', 'Todos'], ['pending', 'Pendentes'], ['preparing', 'Preparando'], ['delivered', 'Entregues'], ['cancelled', 'Cancelados']] as const).map(([k, label]) => {
+                  const n = k === 'all' ? orders.length : orders.filter(o => (o.status || 'pending') === k).length;
+                  return (
+                    <button key={k} type="button" onClick={() => setOrderStatusFilter(k)}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${orderStatusFilter === k ? 'border-green-600 bg-green-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>
+                      {label} <span className="opacity-70">{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Celular: um cartão por pedido */}
+              <div className="space-y-3 lg:hidden">
+                {visibleOrders.length === 0 && <p className="py-8 text-center text-sm text-slate-500">Nenhum pedido aqui.</p>}
+                {visibleOrders.map(order => (
+                  <div key={order.id} className="rounded-xl border bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-green-700">#{order.orderNumber || order.id.slice(0, 4).toUpperCase()}</span>
+                        {order.createdAt && (
+                          <span className="ml-2 text-[11px] text-slate-400">
+                            {new Date(order.createdAt).toLocaleDateString('pt-BR')} {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                      {getStatusBadge(order.status)}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold">{order.customerName}</p>
+                        <p className="text-xs text-slate-500">{maskPhone(order.customerPhone)}</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="shrink-0 text-green-700"
+                        onClick={() => window.open(whatsappLink(order.customerPhone, `Olá ${order.customerName}! Sobre seu pedido #${order.orderNumber || ''} da Lev & Fit:`), '_blank')}>
+                        <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+                      </Button>
+                    </div>
+                    {order.deliveryType === 'entrega' && order.address && (
+                      <p className="mt-2 flex items-start gap-1 text-xs text-slate-600">
+                        <Bike className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span className="break-words">{order.address}{order.deliveryKm ? ` (${formatKm(order.deliveryKm)})` : ''}</span>
+                      </p>
+                    )}
+                    <div className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-xs">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="break-words leading-snug">
+                          <span className="font-semibold">{item.quantity}x</span> {item.name}
+                          {item.notes && (
+                            <span className={`ml-1 inline-block rounded px-1 font-bold ${item.notes.startsWith('Sem') ? 'bg-blue-100 text-blue-700' : 'text-slate-500'}`}>{item.notes}</span>
+                          )}
+                        </div>
+                      ))}
+                      {order.notes && (
+                        <div className="mt-1 flex items-start gap-1 rounded bg-amber-50 p-1 text-amber-800">
+                          <StickyNote className="mt-0.5 h-3 w-3 shrink-0" /> {order.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 flex items-end justify-between gap-2">
+                      <div className="text-xs text-slate-500">
+                        <p className="text-base font-bold text-slate-900 tabular-nums">{formatBRL(order.total)}</p>
+                        {order.discount > 0 && <p className="text-green-600">Desc: -{formatBRL(order.discount)}</p>}
+                        {!!order.deliveryFee && order.deliveryFee > 0 && <p>Entrega: {formatBRL(order.deliveryFee)}</p>}
+                        <p>{order.paymentMethod === 'pix' ? 'PIX' : order.paymentMethod === 'cartao-link' ? 'Cartão (link)' : 'Dinheiro'}</p>
+                      </div>
+                      <Select value={order.status || 'pending'} onValueChange={(val) => onUpdateOrderStatus(order.id, val as OrderStatus)}>
+                        <SelectTrigger className="w-[140px]" aria-label="Mudar status">
+                          <SelectValue>
+                            {(v: string) => ({ pending: 'Pendente', preparing: 'Preparando', delivered: 'Entregue', cancelled: 'Cancelado' } as Record<string, string>)[v] ?? v}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pendente</SelectItem>
+                          <SelectItem value="preparing">Preparando</SelectItem>
+                          <SelectItem value="delivered">Entregue</SelectItem>
+                          <SelectItem value="cancelled">Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Computador: tabela */}
+              <div className="hidden rounded-md border lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -855,22 +952,14 @@ export default function AdminPanel({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.length === 0 ? (
+                    {visibleOrders.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="h-24 text-center text-slate-500">
-                          Nenhum pedido recebido ainda.
+                          Nenhum pedido aqui.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      orders
-                        .filter(o => {
-                          const q = orderSearch.trim().toLowerCase();
-                          if (!q) return true;
-                          return (o.orderNumber || '').toLowerCase().includes(q)
-                            || o.customerName.toLowerCase().includes(q)
-                            || o.customerPhone.includes(q.replace(/\D/g, '') || '§');
-                        })
-                        .map((order) => (
+                      visibleOrders.map((order) => (
                         <TableRow key={order.id}>
                           <TableCell className="align-top">
                             <div className="flex flex-col">
@@ -1029,7 +1118,7 @@ export default function AdminPanel({
                           : <ImageOff className="h-5 w-5 text-slate-300" />}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{product.name}</p>
+                        <p className="line-clamp-2 font-semibold leading-snug text-slate-900">{product.name}</p>
                         <p className="text-sm font-bold text-green-700 tabular-nums">{formatBRL(product.price)}</p>
                         <p className="truncate text-xs text-slate-400">{categories.find(c => c.id === product.categoryId)?.name || 'Sem categoria'}</p>
                       </div>
