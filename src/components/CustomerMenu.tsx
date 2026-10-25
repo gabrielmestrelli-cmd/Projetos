@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList, Bike, Store, Loader2, AlertCircle, Sparkles, MapPin } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Search, Instagram, Star, Clock, Package, CheckCircle2, CreditCard, Landmark, Banknote, Grid, LayoutList, Heart, MessageCircle, Send, Bookmark, Home, User, Trash2, Leaf, Droplets, Info, Utensils, ClipboardList, Bike, Store, Loader2, AlertCircle, Sparkles, MapPin, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
@@ -22,6 +22,7 @@ import { maskPhone, isValidPhone, normalizePhone, whatsappLink } from '../lib/ph
 import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
 import { supabase } from '../lib/supabase';
+import { useBackToClose } from '../lib/backClose';
 import { DEFAULT_DELIVERY, feeFor, formatKm, mapLink } from '../lib/delivery';
 import { StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { CategoryArt } from './CategoryIcons';
@@ -257,7 +258,7 @@ export default function CustomerMenu({
         notes: notes
       }];
     });
-    toast.success(`${quantity > 1 ? `${quantity}x ` : ''}${product.name}${notes ? ` (${notes})` : ''} adicionado ao carrinho`);
+    toast.success(`${quantity > 1 ? `${quantity}x ` : ''}${product.name}${notes ? ` (${notes})` : ''} adicionado ao carrinho`, { duration: 1800 });
   };
 
   const removeFromCart = (productId: string, notes?: string) => {
@@ -333,6 +334,14 @@ export default function CustomerMenu({
 
   // Trocou o WhatsApp: o cupom precisa ser conferido de novo
   useEffect(() => { setCouponApplied(false); }, [customerPhone]);
+
+  // "Voltar" do celular fecha a janela aberta em vez de sair do site
+  const closeProduct = () => { setSelectedProduct(null); setDetailQuantity(1); setDetailGluten('com'); setDetailLactose('com'); };
+  useBackToClose(!!selectedProduct, closeProduct);
+  useBackToClose(isCartOpen, () => setIsCartOpen(false));
+  useBackToClose(isFeeOpen, () => setIsFeeOpen(false));
+  useBackToClose(storyIndex !== null, () => setStoryIndex(null));
+  useBackToClose(activeTab === 'orders', () => setActiveTab('menu'));
 
   const kibe = products.find(p => p.available && isCoxinha(p) && !hasGlutenOption(p));
   const coxinha = products.find(p => p.available && hasGlutenOption(p));
@@ -1287,7 +1296,7 @@ export default function CustomerMenu({
       )}
 
       <Dialog open={isFeeOpen} onOpenChange={setIsFeeOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+        <DialogContent className="top-auto bottom-0 left-0 max-h-[92dvh] w-full max-w-full translate-x-0 translate-y-0 overflow-y-auto overscroll-contain rounded-b-none rounded-t-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] data-open:slide-in-from-bottom-10 data-open:zoom-in-100 sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-h-[90dvh] sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-green-600" /> Calcular entrega</DialogTitle>
             <DialogDescription>
@@ -1307,18 +1316,24 @@ export default function CustomerMenu({
       </Dialog>
 
       {/* Product Detail Dialog */}
-      <Dialog open={!!selectedProduct} onOpenChange={(open) => {
-        if (!open) {
-          setSelectedProduct(null);
-          setDetailQuantity(1);
-          setDetailGluten('com');
-          setDetailLactose('com');
-        }
-      }}>
-        <DialogContent className="p-0 overflow-hidden sm:max-w-md bg-white border-none shadow-2xl">
+      <Dialog open={!!selectedProduct} onOpenChange={(open) => { if (!open) closeProduct(); }}>
+        {/* No celular abre de baixo para cima e rola por dentro (antes ficava maior que a tela e o X sumia) */}
+        <DialogContent
+          showCloseButton={false}
+          className="top-auto bottom-0 left-0 max-h-[92dvh] w-full max-w-full translate-x-0 translate-y-0 gap-0 overflow-y-auto overscroll-contain rounded-b-none rounded-t-3xl border-none bg-white p-0 shadow-2xl data-open:slide-in-from-bottom-10 data-open:zoom-in-100 sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-h-[90dvh] sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl"
+        >
           {selectedProduct && (
             <div className="flex flex-col">
-              <div className="relative aspect-square sm:aspect-video overflow-hidden">
+              <div className="relative aspect-[4/3] shrink-0 overflow-hidden sm:aspect-video">
+                <button
+                  type="button"
+                  aria-label="Fechar"
+                  onClick={closeProduct}
+                  className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-green-500 active:scale-95"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <span className="absolute left-1/2 top-2 z-10 h-1.5 w-12 -translate-x-1/2 rounded-full bg-white/80 sm:hidden" aria-hidden="true" />
                 <img 
                   src={selectedProduct.image || '/perfil.jpg'} onError={(e) => { const i = e.currentTarget; if (!i.src.endsWith('/perfil.jpg')) i.src = '/perfil.jpg'; }} 
                   alt={selectedProduct.name}
@@ -1425,7 +1440,8 @@ export default function CustomerMenu({
                   </div>
                 )}
 
-                <div className="pt-4 space-y-4 border-t border-slate-100">
+                {/* Preço e botão ficam sempre visíveis no pé da janela */}
+                <div className="sticky bottom-0 z-10 -mx-6 -mb-6 space-y-4 border-t border-slate-100 bg-white px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_16px_-12px_rgba(0,0,0,0.15)]">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-400 font-medium">Preço unitário</span>
@@ -1557,22 +1573,22 @@ export default function CustomerMenu({
         </button>
       </div>
 
-      {/* Floating WhatsApp Button */}
-      <motion.button
+      {/* Floating WhatsApp Button (só no cardápio, para não cobrir botões das outras abas) */}
+      {activeTab === 'menu' && <motion.button
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         aria-label="Falar no WhatsApp"
         onClick={() => window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank')}
-        className={`fixed right-6 z-40 ${cartCount > 0 && activeTab === 'menu' ? 'bottom-40 md:bottom-28' : 'bottom-24 md:bottom-6'} bg-green-500 text-white p-4 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-colors`}
+        className={`fixed right-4 md:right-6 z-40 ${cartCount > 0 ? 'bottom-40 md:bottom-28' : 'bottom-24 md:bottom-6'} bg-green-500 text-white p-3 md:p-4 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-colors`}
       >
         <MessageCircle className="w-6 h-6" />
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
         </span>
-      </motion.button>
+      </motion.button>}
       </>, document.body)}
     </div>
   );
