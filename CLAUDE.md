@@ -115,8 +115,8 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 
 ## 8. Publicação
 
-- No ar em **https://levfit-congelados.vercel.app** — projeto Vercel **levfit-cardapio** (conta `bobmendes`, time `bobmendes-projects`). Esse é o único projeto do site; não criar outro.
-- O site é estático: `npm run build` gera `dist/`. Publicar com `vercel deploy <pasta> --prod` com a pasta ligada ao projeto (`vercel link --project levfit-cardapio`, precisa `vercel login`). Nunca usar `--temporary`: cria um projeto novo com nome aleatório a cada vez. As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
+- No ar em **https://levfit-congelados.vercel.app** — projeto Vercel **levfit-congelados** (conta `bobmendes`, time `bobmendes-projects`). Esse é o único projeto do site; não criar outro.
+- O site é estático: `npm run build` gera `dist/`. Publicar com `vercel deploy <pasta> --prod` com a pasta ligada ao projeto (`vercel link --project levfit-congelados`, precisa `vercel login`). Nunca usar `--temporary`: cria um projeto novo com nome aleatório a cada vez. As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
 - Publicar **sempre o `dist/` inteiro** e manter junto os arquivos de `assets/` das versões anteriores. Os assets têm cache de 1 ano (`immutable`); se um arquivo faltar, o Safari guarda o "não encontrado" e a página fica branca. Por isso o `vite.config.ts` põe um código de build novo no nome de cada arquivo, e o `vercel.json` manda `no-store` no `/` e no `index.html`.
 - `src/main.tsx` tem um ErrorBoundary (nunca tela branca: mostra aviso, botão Recarregar e WhatsApp) e recarrega sozinho uma vez se um arquivo antigo não carregar.
