@@ -216,7 +216,7 @@ export default function CustomerMenu({
           <span className="h-10 w-10 shrink-0 rounded-full bg-white/25 p-1.5 ring-2 ring-white/60"><CategoryArt id={cat.id} name={cat.name} /></span>
           <div className="min-w-0">
             <h2 className="text-base font-black uppercase tracking-wide">🔥 Mais pedidas</h2>
-            <p className="text-xs font-medium text-white/90">Os sabores que a galera mais pede</p>
+            <p className="text-xs font-medium text-white/90">Os sabores que os clientes mais pedem</p>
           </div>
         </div>
       );
