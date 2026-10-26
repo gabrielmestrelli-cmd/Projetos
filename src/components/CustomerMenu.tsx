@@ -206,6 +206,21 @@ export default function CustomerMenu({
     if (idx > 0 && displayItems[idx - 1].section === section) return null;
     const cat = section === MAIS_PEDIDAS_ID ? { id: MAIS_PEDIDAS_ID, name: 'Mais pedidas' } : categories.find(c => c.id === section);
     if (!cat) return null;
+    if (cat.id === MAIS_PEDIDAS_ID) {
+      // Destaque das mais pedidas (opção C): faixa laranja cheia
+      return (
+        <div
+          className={`flex items-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3.5 text-white shadow-sm shadow-orange-200 ${mode === 'grid' ? 'col-span-3 md:col-span-4' : 'md:col-span-2 md:rounded-xl md:mt-2'}`}
+          id={`secao-${cat.id}`}
+        >
+          <span className="h-10 w-10 shrink-0 rounded-full bg-white/25 p-1.5 ring-2 ring-white/60"><CategoryArt id={cat.id} name={cat.name} /></span>
+          <div className="min-w-0">
+            <h2 className="text-base font-black uppercase tracking-wide">🔥 Mais pedidas</h2>
+            <p className="text-xs font-medium text-white/90">Os sabores que a galera mais pede</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         className={`flex items-center gap-2.5 bg-slate-50/80 px-4 py-3 ${mode === 'grid' ? 'col-span-3 md:col-span-4' : 'md:col-span-2 md:rounded-xl md:mt-2'}`}
@@ -879,6 +894,17 @@ export default function CustomerMenu({
         </button>
         {orderedCategories.map((cat) => {
           const Icon = cat.icon ? ICON_MAP[cat.icon] : Package;
+          if (cat.id === MAIS_PEDIDAS_ID) {
+            const on = selectedCategory === cat.id;
+            return (
+              <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className="flex min-w-0 flex-col items-center gap-1.5 flex-shrink-0 group">
+                <div className={`w-[46px] h-[46px] sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-1.5 sm:p-2 shadow-md shadow-orange-200 transition-all duration-300 ${on ? 'ring-2 ring-orange-600 ring-offset-2' : ''}`}>
+                  <span className="block h-full w-full [&_circle:first-child]:fill-amber-300"><CategoryArt id={cat.id} name={cat.name} /></span>
+                </div>
+                <span className="rounded-full bg-orange-500 px-1.5 py-[1px] text-center text-[8px] font-black leading-tight text-white sm:text-[10px]">Mais pedidas</span>
+              </button>
+            );
+          }
           return (
             <button
               key={cat.id}
@@ -959,7 +985,7 @@ export default function CustomerMenu({
                 <motion.div
                   key={product.id}
                   initial={false}
-                  className="bg-white p-4 flex gap-4 items-start hover:bg-slate-50 transition-colors cursor-pointer md:border-b md:border-slate-100"
+                  className={`${section === MAIS_PEDIDAS_ID ? 'border-l-4 border-orange-400 bg-orange-50/60 hover:bg-orange-50' : 'bg-white hover:bg-slate-50'} p-4 flex gap-4 items-start transition-colors cursor-pointer md:border-b md:border-slate-100`}
                 >
                   <div className="flex-1 space-y-3" onClick={() => setSelectedProduct(product)}>
                     <div className="space-y-1">
@@ -979,7 +1005,9 @@ export default function CustomerMenu({
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex flex-col gap-1">
                         <span className="font-bold text-green-700 text-lg">{formatBRL(product.price)}</span>
-                        {isNew(product) ? (
+                        {section === MAIS_PEDIDAS_ID ? (
+                          <Badge className="w-fit bg-orange-500 text-white border-none text-[9px] px-2 h-5 font-bold">🔥 MAIS PEDIDA</Badge>
+                        ) : isNew(product) ? (
                           <Badge className="w-fit bg-purple-100 text-purple-700 border-none text-[9px] px-2 h-5 font-bold">NOVIDADE ✨</Badge>
                         ) : null}
                         {(lactoseRule(product) === 'so-sem' || lactoseRule(product) === 'nao-contem') && (
@@ -1022,7 +1050,7 @@ export default function CustomerMenu({
                 <motion.div
                   key={product.id}
                   initial={false}
-                  className="relative aspect-square group cursor-pointer"
+                  className={`relative aspect-square group cursor-pointer ${section === MAIS_PEDIDAS_ID ? 'ring-2 ring-inset ring-orange-400' : ''}`}
                   onClick={() => setSelectedProduct(product)}
                 >
                   <img 
