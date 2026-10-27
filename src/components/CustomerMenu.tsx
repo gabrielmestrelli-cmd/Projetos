@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { newId } from '../lib/id';
 import { supabase } from '../lib/supabase';
 import { useBackToClose } from '../lib/backClose';
+import { pageViewCardapio, leftCardapio, trackViewContent, trackAddToCart, trackContact, trackInitiateCheckout } from '../lib/metaPixel';
 import { DEFAULT_DELIVERY, feeFor, formatKm, mapLink } from '../lib/delivery';
 import { StoryViewer, OffersCarousel, orderStories } from './Stories';
 import { CategoryArt } from './CategoryIcons';
@@ -274,6 +275,8 @@ export default function CustomerMenu({
       }];
     });
     toast.success(`${quantity > 1 ? `${quantity}x ` : ''}${product.name}${notes ? ` (${notes})` : ''} adicionado ao carrinho`, { duration: 1800 });
+    // Meta Pixel: só a quantidade adicionada nesta ação
+    trackAddToCart({ id: product.id, price: product.price }, quantity);
   };
 
   const removeFromCart = (productId: string, notes?: string) => {
@@ -358,6 +361,24 @@ export default function CustomerMenu({
   useBackToClose(storyIndex !== null, () => setStoryIndex(null));
   useBackToClose(activeTab === 'orders', () => setActiveTab('menu'));
 
+  // Meta Pixel: PageView do cardápio (uma vez por visita; só envia se a pessoa aceitou os cookies)
+  useEffect(() => {
+    pageViewCardapio();
+    return () => leftCardapio();
+  }, []);
+
+  // Meta Pixel: ViewContent uma vez a cada abertura da janela de um produto
+  useEffect(() => {
+    if (!selectedProduct) return;
+    trackViewContent({
+      id: selectedProduct.id,
+      name: selectedProduct.name,
+      price: selectedProduct.price,
+      category: categories.find(c => c.id === selectedProduct.categoryId)?.name,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProduct?.id]);
+
   const kibe = products.find(p => p.available && isCoxinha(p) && !hasGlutenOption(p));
   const coxinha = products.find(p => p.available && hasGlutenOption(p));
 
@@ -376,7 +397,21 @@ export default function CustomerMenu({
   const paymentLabel = (m: Order['paymentMethod']) =>
     m === 'pix' ? 'PIX' : m === 'cartao-link' ? 'Cartão (link)' : 'Dinheiro';
 
+  // Trava imediata contra cliques repetidos no "Enviar pedido": o estado isSubmitting só muda depois
+  // do clique seguinte, e a conferência do cupom espera o banco — sem isso, 2 toques rápidos geravam 2 pedidos
+  // (e 2 InitiateCheckout no Meta Pixel).
+  const placingOrderRef = useRef(false);
   const handlePlaceOrder = async () => {
+    if (placingOrderRef.current) return;
+    placingOrderRef.current = true;
+    try {
+      await placeOrder();
+    } finally {
+      placingOrderRef.current = false;
+    }
+  };
+
+  const placeOrder = async () => {
     if (isSubmitting) return;
     if (cart.length === 0) {
       toast.error('Seu carrinho está vazio');
@@ -437,6 +472,13 @@ export default function CustomerMenu({
     };
 
     const orderNumber = await onPlaceOrder(newOrder);
+
+    // Meta Pixel: pedido válido indo para o WhatsApp. Valor = produtos com combos e cupom, sem a entrega.
+    trackInitiateCheckout(
+      newOrder.id,
+      cart.map(item => ({ id: item.productId, quantity: item.quantity, item_price: item.price })),
+      subtotal - discount,
+    );
 
     const line = '--------------------------------';
     const message = [
@@ -539,7 +581,10 @@ export default function CustomerMenu({
                       size="icon"
                       aria-label="Aumentar"
                       className="h-8 w-8 rounded-lg text-green-600"
-                      onClick={() => updateQuantity(item.productId, item.quantity + 1, item.notes)}
+                      onClick={() => {
+                        updateQuantity(item.productId, item.quantity + 1, item.notes);
+                        trackAddToCart({ id: item.productId, price: item.price }, 1);
+                      }}
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
@@ -771,7 +816,7 @@ export default function CustomerMenu({
                   variant="outline" 
                   size="sm" 
                   className="h-9 px-3 font-semibold border-slate-200 hover:bg-slate-50 rounded-lg text-xs flex-1 md:flex-none flex items-center justify-center gap-1"
-                  onClick={() => window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank')}
+                  onClick={() => { trackContact('cabecalho'); window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank'); }}
                 >
                   <MessageCircle className="h-3 w-3" />
                   WhatsApp
@@ -1539,6 +1584,9 @@ export default function CustomerMenu({
       {/* Discreet Footer with Admin Link */}
       <footer className="py-8 px-4 border-t border-slate-50 text-center space-y-2">
         <p className="text-xs text-slate-300">© {new Date().getFullYear()} Lev & Fit - Marmitas Congeladas</p>
+        <Link to="/privacidade" className="block text-xs text-slate-400 underline-offset-2 hover:text-green-700 hover:underline">
+          Privacidade e cookies
+        </Link>
         <Link to="/admin" className="text-[10px] text-slate-100 hover:text-green-600 transition-colors opacity-10 hover:opacity-100">
           Painel Administrativo
         </Link>
@@ -1608,7 +1656,7 @@ export default function CustomerMenu({
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         aria-label="Falar no WhatsApp"
-        onClick={() => window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank')}
+        onClick={() => { trackContact('flutuante'); window.open(whatsappLink(profile.phone || BUSINESS_CONFIG.phone), '_blank'); }}
         className={`fixed right-4 md:right-6 z-40 ${cartCount > 0 ? 'bottom-40 md:bottom-28' : 'bottom-24 md:bottom-6'} bg-green-500 text-white p-3 md:p-4 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-colors`}
       >
         <MessageCircle className="w-6 h-6" />

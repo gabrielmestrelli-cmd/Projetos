@@ -13,6 +13,8 @@ const AdminPanel = lazy(() => import('./components/AdminPanel'));
 import { Category, Product, Order, MenuData, Testimonial, Promotion, BusinessProfile } from './types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_TESTIMONIALS, INITIAL_PROMOTIONS, INITIAL_PROFILE } from './constants';
 import { Settings } from 'lucide-react';
+import { ConsentBanner } from './components/ConsentBanner';
+import { PrivacyPage } from './components/PrivacyPage';
 import { supabase } from './lib/supabase';
 import { normalizePhone } from './lib/phone';
 import { DEFAULT_DELIVERY } from './lib/delivery';
@@ -501,6 +503,7 @@ export default function App() {
                 </div>
               } 
             />
+            <Route path="/privacidade" element={<PrivacyPage />} />
             <Route 
               path="/admin/*" 
               element={
@@ -528,6 +531,7 @@ export default function App() {
           </Routes>
         </main>
         <Toaster position="top-center" />
+        <ConsentBanner />
       </div>
     </Router>
   );
