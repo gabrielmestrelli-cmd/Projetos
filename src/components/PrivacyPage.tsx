@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAdsConsent, onAdsConsentChange, setAdsConsent, type AdsConsent } from '../lib/metaPixel';
+import { maskPhone, whatsappLink } from '../lib/phone';
 
-// RASCUNHO para revisão da Lev & Fit. Os trechos marcados "[A CONFIRMAR]" dependem de informações
-// que só a loja pode dar; não publicar antes de preenchê-los e aprovar o texto.
+// Política de privacidade da Lev&Fit. Descreve o site como ele funciona de verdade (ver CLAUDE.md):
+// se o tratamento de dados mudar (novo serviço, prazo de guarda etc.), atualize este texto.
+// O contato é o WhatsApp comercial do perfil da loja (o mesmo dos botões do site).
 
-export function PrivacyPage() {
+export function PrivacyPage({ phone }: { phone: string }) {
   const [consent, setConsent] = useState<AdsConsent>(() => getAdsConsent());
   useEffect(() => onAdsConsentChange(setConsent), []);
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -19,7 +21,7 @@ export function PrivacyPage() {
     <div className="mx-auto w-full max-w-2xl px-4 py-8 text-sm leading-relaxed text-slate-700">
       <Link to="/" className="text-sm font-semibold text-green-700">← Voltar ao cardápio</Link>
       <h1 className="mt-4 text-2xl font-black text-slate-900">Privacidade e cookies</h1>
-      <p className="mt-1 text-xs text-slate-400">Última atualização: [A CONFIRMAR]</p>
+      <p className="mt-1 text-xs text-slate-400">Última atualização: 30/10/2026</p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
         <h2 className="font-bold text-slate-900">Suas escolhas de cookies</h2>
@@ -38,8 +40,11 @@ export function PrivacyPage() {
 
       <h2 className="mt-8 text-base font-bold text-slate-900">Quem somos</h2>
       <p className="mt-1">
-        Lev & Fit, marmitas congeladas da Grande Florianópolis. Responsável: [A CONFIRMAR: razão social e CNPJ].
-        Contato sobre privacidade: [A CONFIRMAR: e-mail ou WhatsApp].
+        Lev&Fit, marmitas congeladas da Grande Florianópolis. Responsável pelos dados: 60.363.847 Victor Hugo
+        Bitencourt Conti, CNPJ 60.363.847/0001-62. Contato sobre privacidade: WhatsApp{' '}
+        <a href={whatsappLink(phone)} target="_blank" rel="noreferrer" className="font-semibold text-green-700 underline underline-offset-2">
+          {maskPhone(phone)}
+        </a>.
       </p>
 
       <h2 className="mt-6 text-base font-bold text-slate-900">Dados do pedido</h2>
@@ -49,19 +54,29 @@ export function PrivacyPage() {
         loja pelo WhatsApp, para combinar a entrega e o pagamento. O telefone também serve para você ver seus pedidos em
         "Meus pedidos" e para conferir o cupom de primeiro pedido.
       </p>
-      <p className="mt-2">Por quanto tempo guardamos os pedidos: [A CONFIRMAR].</p>
+      <p className="mt-2">
+        A mensagem do pedido é enviada pelo seu próprio WhatsApp, então ela também passa pelo WhatsApp (Meta) e fica na
+        conversa com a loja.
+      </p>
+      <p className="mt-2">
+        Os dados dos pedidos ficam guardados no nosso sistema, hospedado no Brasil (São Paulo), enquanto forem necessários
+        para atender o pedido e para cumprir obrigações legais e fiscais, e podem ser excluídos a seu pedido quando não
+        houver obrigação de guardá-los.
+      </p>
 
       <h2 className="mt-6 text-base font-bold text-slate-900">Endereço e localização</h2>
       <p className="mt-1">
         Para calcular a entrega, o CEP digitado é consultado nos serviços ViaCEP e BrasilAPI, e o endereço é localizado
         no mapa pelo OpenStreetMap (Nominatim), com a distância calculada pelo OSRM. Se você tocar em "Usar minha
-        localização", o navegador pede sua permissão e as coordenadas são usadas só para esse cálculo.
+        localização", o navegador pede sua permissão; as coordenadas são usadas para esse cálculo, ficam salvas no seu
+        aparelho e vão como link do mapa na mensagem do pedido, para facilitar a entrega. Elas não são gravadas no
+        nosso sistema de pedidos.
       </p>
 
       <h2 className="mt-6 text-base font-bold text-slate-900">O que fica no seu navegador</h2>
       <p className="mt-1">
         Para você não precisar digitar tudo de novo, o site guarda no seu próprio aparelho o carrinho, o nome, o WhatsApp,
-        o endereço e a sua escolha sobre cookies. Você pode apagar esses dados limpando os dados do site no navegador.
+        o endereço (e a localização, se você usou) e a sua escolha sobre cookies. Você pode apagar esses dados limpando os dados do site no navegador.
       </p>
 
       <h2 className="mt-6 text-base font-bold text-slate-900">Cookies de publicidade (Meta Pixel)</h2>
@@ -80,8 +95,8 @@ export function PrivacyPage() {
 
       <h2 className="mt-6 text-base font-bold text-slate-900">Seus direitos</h2>
       <p className="mt-1">
-        Pela LGPD, você pode pedir para ver, corrigir ou apagar seus dados, entre outros direitos, pelo contato acima.
-        [A CONFIRMAR: como a loja vai atender esses pedidos].
+        Pela LGPD, você pode pedir para ver, corrigir ou apagar seus dados, entre outros direitos. Basta falar com a
+        gente pelo WhatsApp informado acima.
       </p>
     </div>
   );

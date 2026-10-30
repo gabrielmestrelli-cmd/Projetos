@@ -503,7 +503,7 @@ export default function App() {
                 </div>
               } 
             />
-            <Route path="/privacidade" element={<PrivacyPage />} />
+            <Route path="/privacidade" element={<PrivacyPage phone={profile.phone} />} />
             <Route 
               path="/admin/*" 
               element={
