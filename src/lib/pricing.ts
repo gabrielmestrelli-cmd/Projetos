@@ -6,7 +6,8 @@ export const PRICING = {
     { min: 15, unitPrice: 19 },
     { min: 10, unitPrice: 20 },
   ],
-  coxinhaCombo: { qty: 3, price: 24 },
+  /** Salgados (coxinha e kibe, pode misturar): a partir de 3 unidades, cada uma sai por R$ 8 */
+  coxinhaCombo: { qty: 3, unitPrice: 8 },
   /** Cupom do primeiro pedido (vale só para WhatsApp que nunca fez pedido). Desconto sobre os produtos, não sobre a entrega. */
   firstOrderCoupon: { code: 'PRIMEIRO5', percent: 5 },
 };
@@ -17,7 +18,7 @@ export const isMarmita = (item: { productId?: string; id?: string; categoryId?: 
   return item.categoryId === 'marmitas' || item.categoryId === 'caldos' || id.startsWith('mar-') || id.startsWith('cal-');
 };
 
-/** Salgados (coxinha e kibe): cada 3 saem pelo preço do combo. */
+/** Salgados (coxinha e kibe): a partir de 3 no carrinho, todos saem pelo preço do combo. */
 export const isCoxinha = (item: { productId?: string; id?: string; categoryId?: string }) =>
   item.categoryId === 'coxinhas' || (item.productId ?? item.id ?? '').startsWith('cox-');
 
@@ -73,12 +74,11 @@ export function summarizeCart(cart: OrderItem[], products: Product[], deliveryFe
     }
   }
 
-  // Coxinhas: cada grupo de 3 sai por R$ 24 (aplica nas mais caras primeiro)
-  const { qty, price } = PRICING.coxinhaCombo;
-  coxinhaPrices.sort((a, b) => b - a);
-  for (let i = 0; i + qty <= coxinhaPrices.length; i += qty) {
-    const groupTotal = coxinhaPrices.slice(i, i + qty).reduce((s, p) => s + p, 0);
-    discount += Math.max(0, groupTotal - price);
+  // Salgados: com 3 ou mais (coxinha e kibe somados), TODAS as unidades saem por R$ 8
+  // (nunca cobra mais caro do que o preço normal).
+  const { qty, unitPrice } = PRICING.coxinhaCombo;
+  if (coxinhaCount >= qty) {
+    for (const p of coxinhaPrices) discount += Math.max(0, p - unitPrice);
   }
 
   const sortedAsc = [...PRICING.marmitaTiers].sort((a, b) => a.min - b.min);

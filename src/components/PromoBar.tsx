@@ -5,7 +5,7 @@ import { PRICING, formatBRL } from '../lib/pricing';
 // Faixa fina no topo com as vantagens da loja (troca de frase sozinha). Some no painel admin.
 const MESSAGES = [
   `10 marmitas ou caldos por ${formatBRL(PRICING.marmitaTiers.find(t => t.min === 10)!.unitPrice * 10)} • 15 por ${formatBRL(PRICING.marmitaTiers.find(t => t.min === 15)!.unitPrice * 15)}`,
-  `${PRICING.coxinhaCombo.qty} salgados (coxinha ou kibe) por ${formatBRL(PRICING.coxinhaCombo.price)}`,
+  `Coxinha ou kibe: a partir de ${PRICING.coxinhaCombo.qty}, ${formatBRL(PRICING.coxinhaCombo.unitPrice)} cada`,
   `Primeiro pedido? ${PRICING.firstOrderCoupon.percent}% OFF com o cupom ${PRICING.firstOrderCoupon.code}`,
   'Muitas opções sem lactose',
 ];

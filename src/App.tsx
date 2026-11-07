@@ -408,33 +408,19 @@ export default function App() {
       delivery_fee: order.deliveryFee ?? 0,
       delivery_km: order.deliveryKm != null ? Math.round(order.deliveryKm * 10) / 10 : null,
       notes: order.notes,
+      coupon: order.coupon ?? null,
     };
 
-    let orderNumber: string | null = null;
-
-    // 1º: função do banco que gera número único
+    // O banco confere preços, descontos e cupom e devolve o número do pedido (#1001...).
+    // Não existe mais gravação direta na tabela (supabase/seguranca-pedidos.sql).
     const { data, error } = await supabase.rpc('criar_pedido', { p: row });
-    if (!error && data) {
-      orderNumber = String(data);
-    } else {
-      console.warn('criar_pedido indisponível, usando insert direto:', error?.message);
-      // 2º: insert simples (funciona mesmo antes de rodar o SQL novo)
-      const fallbackNumber = order.id.slice(0, 6).toUpperCase();
-      const { error: insertError } = await supabase.from('orders').insert([{
-        id: row.id,
-        order_number: fallbackNumber,
-        customer_name: row.customer_name,
-        customer_phone: row.customer_phone,
-        items: row.items,
-        total_price: row.total_price,
-        discount: row.discount,
-        payment_method: row.payment_method,
-        status: 'pending',
-        created_at: order.createdAt,
-      }]);
-      if (insertError) console.error('Supabase save error:', insertError);
-      orderNumber = fallbackNumber;
+    if (error || !data) {
+      console.error('criar_pedido:', error?.message);
+      const msg = error?.message ?? '';
+      throw new Error(/Muitos pedidos|indisponível|Telefone inválido|Quantidade inválida|grande demais|itens demais/.test(msg)
+        ? msg : 'Tente de novo em instantes ou chame a loja no WhatsApp.');
     }
+    const orderNumber = String(data);
 
     setOrders(prev => [{ ...order, orderNumber }, ...prev]);
     return orderNumber;

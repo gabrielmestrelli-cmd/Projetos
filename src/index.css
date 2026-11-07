@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./styles/shadcn-tailwind.css"; /* cópia do CSS do shadcn (a biblioteca inteira trazia dezenas de dependências sem uso) */
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));

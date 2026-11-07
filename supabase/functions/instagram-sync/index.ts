@@ -35,8 +35,9 @@ async function sync(req: Request, sql: ReturnType<typeof postgres>) {
   if (!token) return json({ ok: false, configured: false, message: 'Instagram ainda não conectado' });
 
   const [prof] = await sql`select stats, instagram_synced_at from public.store_profile where id = 1`;
-  const force = new URL(req.url).searchParams.get('force') === '1';
-  if (!force && prof?.instagram_synced_at && Date.now() - new Date(prof.instagram_synced_at).getTime() < 60_000) {
+  // Trava de 1 minuto sem exceção: a função é pública, então ninguém pode pular a trava
+  // (antes "?force=1" pulava, e chamadas repetidas gastavam o limite da API do Instagram).
+  if (prof?.instagram_synced_at && Date.now() - new Date(prof.instagram_synced_at).getTime() < 60_000) {
     return json({ ok: true, skipped: true, message: 'Atualizado há menos de 1 minuto' });
   }
 

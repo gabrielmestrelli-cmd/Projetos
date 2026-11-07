@@ -47,6 +47,8 @@ export interface Order {
   /** Distância calculada até o cliente, em km */
   deliveryKm?: number;
   notes?: string;
+  /** Código do cupom pedido pelo cliente (o banco confere se vale) */
+  coupon?: string;
 }
 
 export interface Testimonial {

@@ -62,7 +62,8 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
 
 - **Descontos** ficam só em `src/lib/pricing.ts` (`PRICING`):
   - 10+ marmitas/caldos (pode misturar) → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
-  - salgados (coxinha e kibe, pode misturar): cada 3 saem por R$ 24.
+  - salgados (coxinha e kibe, pode misturar): a partir de 3 unidades, **todas** saem por R$ 8 (em vez de R$ 9).
+  - O banco recalcula tudo isso em `criar_pedido` (`supabase/seguranca-pedidos.sql`): **mudou a regra aqui, mude lá também**.
   - Entra no combo = categoria `marmitas`/`caldos` ou id `mar-*`/`cal-*`; salgado = categoria `coxinhas` ou id `cox-*`. O kibe "contém glúten" (sem opção com/sem glúten: `hasGlutenOption`).
 - O cardápio segue o post fixado do Instagram (@levfitcongelados): tradicionais 350g R$ 21; caldos 450g R$ 21; molhos 450g (R$ 25 a 40); coxinha e kibe 110g R$ 9. Fotos reais em `public/produtos/`.
 - **Entrega** (`profile.delivery`, coluna `store_profile.delivery` jsonb, editável na aba Perfil):
@@ -71,7 +72,7 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
   - Cálculo em `src/lib/delivery.ts`: CEP → ViaCEP/BrasilAPI; coordenadas → Nominatim (OpenStreetMap); distância de carro → OSRM (se falhar, linha reta × 1,35). Tudo gratuito e sem chave, chamado do navegador.
   - O endereço do cliente é digitado em `components/DeliveryAddress.tsx` (CEP preenche rua/bairro/cidade) e fica salvo no navegador. Sem ponto de saída configurado ou endereço não achado → "a combinar".
   - O pedido guarda `delivery_fee` e `delivery_km`.
-- **Instagram**: a Edge Function `supabase/functions/instagram-sync` (deploy no painel do Supabase, sem "Verify JWT") copia seguidores/seguindo/publicações e os stories das últimas 24 h para `store_profile.stats` e a tabela `instagram_stories`. Roda a cada 15 min (pg_cron, `supabase/instagram.sql`) e no botão "Atualizar tudo" do painel. O token fica em `instagram_config` (sem leitura pública); o admin cola o token na aba Perfil (`salvar_token_instagram`). A foto do perfil no site abre esses stories (sem stories, abre as ofertas).
+- **Instagram**: a Edge Function `supabase/functions/instagram-sync` (deploy no painel do Supabase, sem "Verify JWT") copia seguidores/seguindo/publicações e os stories das últimas 24 h para `store_profile.stats` e a tabela `instagram_stories`. Roda a cada 15 min (pg_cron, `supabase/instagram.sql`) e no botão "Atualizar tudo" do painel, com trava fixa de 1 minuto entre execuções (não existe mais `?force=1`). O token fica em `instagram_config` (sem leitura pública); o admin cola o token na aba Perfil (`salvar_token_instagram`). A foto do perfil no site abre esses stories (sem stories, abre as ofertas).
 - **Avaliações**: `testimonials` com `source = 'google'` são avaliações reais copiadas do Google (`supabase/avaliacoes-google.sql`); `store_profile.google` guarda nota, total e o link de avaliar. Aparecem na seção "O que os clientes dizem".
 - **Painel**: o perfil salva sozinho 1,5 s depois de editar; o selo no topo mostra "Tudo salvo". "Atualizar tudo" salva o que faltar, puxa o Instagram e recarrega tudo.
 - **Etiquetas do produto** (painel → Produtos → Etiquetas, `src/lib/opcoes.ts`): `mais pedida` (entra na categoria virtual "Mais pedidas", que aparece primeiro e no topo de "Todos"), `só sem lactose`, `só com lactose`. Sem etiqueta: marmitas e molhos deixam escolher com/sem lactose; caldos mostram "não contém lactose". `supabase/opcoes-lactose.sql` tem as etiquetas que o Conti pediu.
@@ -95,8 +96,9 @@ Tabelas no Supabase: `categories`, `products`, `store_profile` (linha `id = 1`),
 - **Admin**: o painel pede **só a senha**; o e-mail fica fixo em `VITE_ADMIN_EMAIL` (padrão `bielmaestrelli@hotmail.com`) e o login é feito pelo **Supabase Auth**. Para trocar a senha, mude a senha desse usuário no Supabase, não no código. Só quem está na tabela `admins` é admin (`is_admin()`). Nunca volte a usar senha escrita no código.
 - **RLS** (ver `supabase/seguranca.sql`):
   - cardápio: leitura pública, escrita só admin;
-  - `orders`: qualquer um pode **criar** pedido (pela função `criar_pedido`, que força `status = 'pending'`); só admin lê/altera;
-  - cliente vê os próprios pedidos pela função `pedidos_do_cliente(telefone)`.
+  - `orders`: ninguém grava direto; pedido novo só entra pela função `criar_pedido`, que força `status = 'pending'`, pega nome e preço de cada item da tabela `products`, recalcula descontos e cupom (`coupon` no payload), limita a taxa de entrega a R$ 150 e trava 3 pedidos por telefone e 60 no total a cada 10 min. Só admin lê/altera;
+  - cliente vê os próprios pedidos pela função `pedidos_do_cliente(telefone)`, que devolve só número, data, status, itens e total (sem nome, endereço e observações).
+  - Mudanças de segurança num banco que já existe: `supabase/seguranca-pedidos.sql` (pode rodar mais de uma vez).
 - `store_profile` guarda também `bio`, `is_open`, `stats` (publicações/seguidores) e `profile_picture`.
 - `orders` guarda também `delivery_type`, `address`, `delivery_fee` e `notes`.
 - O app salva **só os itens que mudaram** (compara com o estado atual) em um `upsert` por tabela, e mostra aviso se der erro. Nunca reenviar a lista inteira: um painel aberto há tempo sobrescreveria mudanças feitas no banco. Não engolir erros do Supabase: ele devolve `{ error }` em vez de lançar exceção.
@@ -118,6 +120,7 @@ Sem essas duas variáveis o site abre só com o cardápio padrão de `constants.
 
 - No ar em **https://www.levfitcongelados.com.br** (domínio no Registro.br: A `216.198.79.1` e `64.29.17.1`, CNAME `www` → Vercel). `levfitcongelados.com.br` e o antigo `levfit-congelados.vercel.app` redirecionam (308) para o www. Projeto Vercel **levfit-congelados** (conta `bobmendes`, time `bobmendes-projects`). Esse é o único projeto do site; não criar outro.
 - O site é estático: `npm run build` gera `dist/`. Publicar com `vercel deploy <pasta> --prod` com a pasta ligada ao projeto (`vercel link --project levfit-congelados`, precisa `vercel login`). Nunca usar `--temporary`: cria um projeto novo com nome aleatório a cada vez. As variáveis `VITE_*` são embutidas no build, então o `.env` precisa estar certo **antes** do build.
+- `vercel.json` (raiz do repositório) tem o cache e os cabeçalhos de segurança (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy). **Copie-o para a pasta publicada.** A CSP libera o script embutido do `index.html` por hash: se mudar esse script, gere o hash novo (sha256 do conteúdo, em base64) e troque no `vercel.json`. Serviço externo novo (API, CDN de script) precisa entrar na CSP, senão o navegador bloqueia.
 - Não usar `cleanUrls` no `vercel.json`: com ele a página inicial dá 404.
 - Publicar **sempre o `dist/` inteiro** e manter junto os arquivos de `assets/` das versões anteriores. Os assets têm cache de 1 ano (`immutable`); se um arquivo faltar, o Safari guarda o "não encontrado" e a página fica branca. Por isso o `vite.config.ts` põe um código de build novo no nome de cada arquivo, e o `vercel.json` manda `no-store` no `/` e no `index.html`.
 - `src/main.tsx` tem um ErrorBoundary (nunca tela branca: mostra aviso, botão Recarregar e WhatsApp) e recarrega sozinho uma vez se um arquivo antigo não carregar.

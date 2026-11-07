@@ -60,9 +60,7 @@ alter table public.orders enable row level security;
 drop policy if exists "cliente cria pedido" on public.orders;
 drop policy if exists "admin gerencia pedidos" on public.orders;
 
-create policy "cliente cria pedido" on public.orders
-  for insert to anon, authenticated
-  with check (status = 'pending');
+-- Pedido novo só entra pela função criar_pedido (que confere preços, descontos e limite)
 
 create policy "admin gerencia pedidos" on public.orders
   for all to authenticated
@@ -88,43 +86,26 @@ begin
   end if;
 end $$;
 
-create or replace function public.criar_pedido(p jsonb)
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare n text;
-begin
-  if jsonb_typeof(p->'items') <> 'array' or jsonb_array_length(p->'items') = 0 then
-    raise exception 'Pedido sem itens';
-  end if;
-  if length(public.norm_tel(p->>'customer_phone')) < 10 then
-    raise exception 'Telefone inválido';
-  end if;
-  n := nextval('public.pedido_numero_seq')::text;
-  insert into public.orders
-  select (jsonb_populate_record(null::public.orders,
-    p || jsonb_build_object(
-      'order_number', n,
-      'status', 'pending',
-      'customer_phone', public.norm_tel(p->>'customer_phone'),
-      'created_at', now()
-    ))).*;
-  return n;
-end;
-$$;
-grant execute on function public.criar_pedido(jsonb) to anon, authenticated;
-
--- 6) "Meus pedidos" do cliente: busca só os pedidos daquele telefone ------
-create or replace function public.pedidos_do_cliente(telefone text)
-returns setof public.orders
+-- 6) "Meus pedidos" do cliente: só número, data, status, itens e total daquele telefone
+drop function if exists public.pedidos_do_cliente(text);
+create function public.pedidos_do_cliente(telefone text)
+returns setof jsonb
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select * from public.orders
+  select jsonb_build_object(
+    'id', id,
+    'order_number', order_number,
+    'customer_phone', customer_phone,
+    'items', items,
+    'total_price', total_price,
+    'discount', discount,
+    'status', status,
+    'created_at', created_at
+  )
+  from public.orders
   where length(public.norm_tel(telefone)) >= 10
     and public.norm_tel(customer_phone) = public.norm_tel(telefone)
   order by created_at desc

@@ -389,7 +389,7 @@ export default function CustomerMenu({
       return `${formatBRL(summary.marmitaTierPrice)} cada (combo)`;
     }
     if (isCoxinha(ref) && coxinhaCount >= PRICING.coxinhaCombo.qty) {
-      return `${formatBRL(item.price)} cada • ${PRICING.coxinhaCombo.qty} por ${formatBRL(PRICING.coxinhaCombo.price)}`;
+      return `${formatBRL(PRICING.coxinhaCombo.unitPrice)} cada (combo)`;
     }
     return `${formatBRL(item.price)} cada`;
   };
@@ -469,9 +469,19 @@ export default function CustomerMenu({
       deliveryFee,
       deliveryKm: deliveryType === 'entrega' && quote.status === 'ok' && quote.km !== null ? quote.km : undefined,
       notes: orderNotes.trim() || undefined,
+      coupon: couponApplied && couponDiscount > 0 ? coupon.code : undefined,
     };
 
-    const orderNumber = await onPlaceOrder(newOrder);
+    let orderNumber: string;
+    try {
+      orderNumber = await onPlaceOrder(newOrder);
+    } catch (err) {
+      setIsSubmitting(false);
+      toast.error('Não foi possível registrar o pedido', {
+        description: err instanceof Error && err.message ? err.message : 'Tente de novo ou chame a loja no WhatsApp.',
+      });
+      return;
+    }
 
     // Meta Pixel: pedido válido indo para o WhatsApp. Valor = produtos com combos e cupom, sem a entrega.
     trackInitiateCheckout(
@@ -544,7 +554,7 @@ export default function CustomerMenu({
             <span className="block">10 marmitas ou caldos saem por R$ 20 cada, 15 por R$ 19 cada</span>
           )}
           {coxinhaCount >= PRICING.coxinhaCombo.qty && (
-            <span className="block font-bold text-orange-600">Oferta salgados: 3 por {formatBRL(PRICING.coxinhaCombo.price)} 🥟</span>
+            <span className="block font-bold text-orange-600">Oferta salgados: {formatBRL(PRICING.coxinhaCombo.unitPrice)} cada 🥟</span>
           )}
         </SheetDescription>
       </SheetHeader>
@@ -601,7 +611,7 @@ export default function CustomerMenu({
         {cart.length > 0 && coxinhaCount === 0 && (kibe || coxinha) && (
           <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3">
             <p className="text-sm font-bold text-orange-900">Que tal uns salgados? 🥟</p>
-            <p className="text-xs text-orange-800">Coxinha ou kibe: {PRICING.coxinhaCombo.qty} por {formatBRL(PRICING.coxinhaCombo.price)}</p>
+            <p className="text-xs text-orange-800">Coxinha ou kibe: a partir de {PRICING.coxinhaCombo.qty}, {formatBRL(PRICING.coxinhaCombo.unitPrice)} cada</p>
             <div className="mt-2 flex gap-2">
               {coxinha && (
                 <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl border-orange-200 bg-white font-bold text-orange-700" onClick={() => setSelectedProduct(coxinha)}>
