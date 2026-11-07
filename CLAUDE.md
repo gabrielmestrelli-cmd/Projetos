@@ -64,6 +64,7 @@ scripts/gerar-sql-inicial.ts  # gera o instalar.sql a partir de seguranca.sql + 
   - 10+ marmitas/caldos (pode misturar) → R$ 20 cada; 15+ → R$ 19 cada (nunca mais caro que o preço normal do prato);
   - salgados (coxinha e kibe, pode misturar): a partir de 3 unidades, **todas** saem por R$ 8 (em vez de R$ 9).
   - O banco recalcula tudo isso em `criar_pedido` (`supabase/seguranca-pedidos.sql`): **mudou a regra aqui, mude lá também**.
+  - **LEMBRETE OBRIGATÓRIO (para a IA):** sempre que uma tarefa mexer em preço, combo, faixa de desconto ou cupom (`src/lib/pricing.ts`, `PRICING`), ao finalizar a resposta avise o usuário, em destaque: "Lembrete: atualizar e rodar `supabase/seguranca-pedidos.sql` no SQL Editor do Supabase (e o `seguranca.sql`/`instalar.sql`), senão o banco grava o pedido com o valor antigo." Atualize você mesmo esses arquivos SQL na mesma tarefa. Preço de um prato mudado só no painel admin não precisa disso: o banco já lê o preço da tabela `products`.
   - Entra no combo = categoria `marmitas`/`caldos` ou id `mar-*`/`cal-*`; salgado = categoria `coxinhas` ou id `cox-*`. O kibe "contém glúten" (sem opção com/sem glúten: `hasGlutenOption`).
 - O cardápio segue o post fixado do Instagram (@levfitcongelados): tradicionais 350g R$ 21; caldos 450g R$ 21; molhos 450g (R$ 25 a 40); coxinha e kibe 110g R$ 9. Fotos reais em `public/produtos/`.
 - **Entrega** (`profile.delivery`, coluna `store_profile.delivery` jsonb, editável na aba Perfil):

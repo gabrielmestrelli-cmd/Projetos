@@ -1,6 +1,8 @@
 import { OrderItem, Product } from '../types';
 
 // Regras de desconto da Lev & Fit. Mude os valores aqui e o site inteiro acompanha.
+// ATENÇÃO: o banco confere o total com as MESMAS regras (supabase/seguranca-pedidos.sql, função criar_pedido).
+// Mudou combo, faixa ou cupom aqui? Mude lá também e rode o arquivo no SQL Editor do Supabase.
 export const PRICING = {
   marmitaTiers: [
     { min: 15, unitPrice: 19 },
