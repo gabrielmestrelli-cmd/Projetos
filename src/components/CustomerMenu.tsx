@@ -411,6 +411,14 @@ export default function CustomerMenu({
     }
   };
 
+  /** Rola o carrinho até o campo que falta e já deixa o cursor nele. */
+  const goToField = (id: string) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => el.focus({ preventScroll: true }), 350);
+  };
+
   const placeOrder = async () => {
     if (isSubmitting) return;
     if (cart.length === 0) {
@@ -419,14 +427,18 @@ export default function CustomerMenu({
     }
     if (!customerName.trim()) {
       toast.error('Informe seu nome');
+      goToField('checkout-name');
       return;
     }
     if (!isValidPhone(customerPhone)) {
       toast.error('Informe um WhatsApp válido com DDD', { description: 'Exemplo: (48) 99999-8888' });
+      goToField('checkout-phone');
       return;
     }
     if (deliveryType === 'entrega' && !isAddressComplete(addressFields)) {
       toast.error('Complete o endereço de entrega', { description: 'CEP, rua, número e cidade' });
+      const a = addressFields;
+      goToField(a.cep.replace(/\D/g, '').length !== 8 ? 'checkout-cep' : !a.street.trim() ? 'checkout-street' : !a.number.trim() ? 'checkout-number' : 'checkout-city');
       return;
     }
     if (deliveryType === 'entrega' && feeResult.outOfRange) {
@@ -548,7 +560,7 @@ export default function CustomerMenu({
             </span>
           ) : summary.marmitasToNextTier !== null && summary.nextTierPrice !== null && marmitaCount > 0 ? (
             <span className="block">
-              Faltam <strong>{summary.marmitasToNextTier} marmitas ou caldos</strong> para pagar {formatBRL(summary.nextTierPrice)} em cada
+              {summary.marmitasToNextTier === 1 ? 'Falta' : 'Faltam'} <strong>{summary.marmitasToNextTier} {summary.marmitasToNextTier === 1 ? 'marmita ou caldo' : 'marmitas ou caldos'}</strong> para pagar {formatBRL(summary.nextTierPrice)} em cada
             </span>
           ) : (
             <span className="block">10 marmitas ou caldos saem por R$ 20 cada, 15 por R$ 19 cada</span>
@@ -564,6 +576,21 @@ export default function CustomerMenu({
           <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             Estamos fechados agora. Você pode mandar o pedido e respondemos assim que abrirmos.
+          </div>
+        )}
+
+        {cart.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-bold text-slate-900">Seus dados</h3>
+            {/* Fica no topo do carrinho: com muitas marmitas, o cliente não achava o nome lá embaixo */}
+            <div className="space-y-1.5">
+              <Label htmlFor="checkout-name" className="text-xs font-bold uppercase text-slate-500">Nome</Label>
+              <Input id="checkout-name" autoComplete="name" placeholder="Como podemos te chamar?" className="h-11 rounded-xl border-none bg-slate-50" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="checkout-phone" className="text-xs font-bold uppercase text-slate-500">WhatsApp</Label>
+              <Input id="checkout-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="(48) 99999-8888" className="h-11 rounded-xl border-none bg-slate-50" value={customerPhone} onChange={e => setCustomerPhone(maskPhone(e.target.value))} />
+            </div>
           </div>
         )}
 
@@ -626,18 +653,6 @@ export default function CustomerMenu({
             </div>
           </div>
         )}
-
-        <div className="space-y-3">
-          <h3 className="font-bold text-slate-900">Seus dados</h3>
-          <div className="space-y-1.5">
-            <Label htmlFor="checkout-name" className="text-xs font-bold uppercase text-slate-500">Nome</Label>
-            <Input id="checkout-name" autoComplete="name" placeholder="Como podemos te chamar?" className="h-11 rounded-xl border-none bg-slate-50" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="checkout-phone" className="text-xs font-bold uppercase text-slate-500">WhatsApp</Label>
-            <Input id="checkout-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="(48) 99999-8888" className="h-11 rounded-xl border-none bg-slate-50" value={customerPhone} onChange={e => setCustomerPhone(maskPhone(e.target.value))} />
-          </div>
-        </div>
 
         <div className="space-y-3">
           <h3 className="flex items-center gap-2 font-bold text-slate-900">

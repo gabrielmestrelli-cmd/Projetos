@@ -6,6 +6,7 @@ import { getAdsConsent, onAdsConsentChange, setAdsConsent, type AdsConsent } fro
  * No celular fica logo abaixo do cabeçalho (embaixo estão a barra de navegação, o "Ver sacola" e o WhatsApp);
  * no computador, no canto inferior esquerdo (o carrinho e o WhatsApp ficam à direita).
  * Barra de cookies de publicidade (Meta Pixel). Aparece só enquanto a pessoa não escolheu.
+ * Camada z-[45]: acima dos botões flutuantes (z-40), abaixo do carrinho e das janelas (z-50), para não tampar o checkout.
  * Nunca aparece no painel admin. A escolha pode ser mudada depois na página /#/privacidade.
  */
 export function ConsentBanner() {
@@ -19,7 +20,7 @@ export function ConsentBanner() {
     <div
       role="region"
       aria-label="Cookies de publicidade"
-      className="fixed inset-x-3 top-[4.5rem] z-[60] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur md:inset-x-auto md:top-auto md:left-4 md:bottom-4"
+      className="fixed inset-x-3 top-[4.5rem] z-[45] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur md:inset-x-auto md:top-auto md:left-4 md:bottom-4"
     >
       <p className="text-xs leading-relaxed text-slate-600">
         Usamos cookies de publicidade da Meta (Facebook/Instagram) para medir nossos anúncios. Você escolhe.{' '}
